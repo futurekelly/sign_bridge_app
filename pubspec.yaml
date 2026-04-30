@@ -1,0 +1,35 @@
+name: sign_bridge
+description: AI-Based Two-Way Sign Language Recognition and Speech Translation
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  provider: ^6.1.1
+
+  # 🆕 Phase 2 additions
+        # WebRTC peer connection + media
+  flutter_webrtc: ^1.4.1
+  permission_handler: ^11.3.1    # Camera + mic runtime permissions
+
+  # 🆕 Phase 3 additions
+  cloud_firestore: 5.6.12
+  firebase_storage: ^12.3.0
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.0
+  
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

@@ -26,10 +26,27 @@ dependencies:
   firebase_auth: ^5.3.0
   
 
+ # 🆕 Phase 4 — AI services
+  speech_to_text: ^7.0.0       # STT
+  flutter_tts: ^4.0.2             # TTS
+  tflite_flutter: ^0.10.4         # On-device gesture model (used later)
+  camera: ^0.10.6                 # Camera frames for gesture pipeline
+  hive: ^2.2.3                    # Local history storage
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.3
+  uuid: ^4.4.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.9
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/gifs/
+    - assets/labels/
+    # Note: assets/models/gesture_model.tflite will be uncommented
+    # once the real model file is added.

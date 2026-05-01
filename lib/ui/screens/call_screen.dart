@@ -1,6 +1,6 @@
-// CallScreen (Phase 3)
-// Reads CallArgs from route to decide whether to act as CALLER or CALLEE.
-// Shows the generated call ID so the caller can share it with the peer.
+// CallScreen (Phase 6)
+// Shows WebRTC video call with Call ID banner, remote/local video,
+// and controls. Uses controller state for all rendering decisions.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,12 +36,55 @@ class CallScreen extends StatelessWidget {
   }
 }
 
-class _CallView extends StatelessWidget {
+class _CallView extends StatefulWidget {
   const _CallView();
+
+  @override
+  State<_CallView> createState() => _CallViewState();
+}
+
+class _CallViewState extends State<_CallView> {
+  bool _isEnding = false;
+
+  Future<void> _handleEndCall(CallController controller) async {
+    if (_isEnding) return; // guard against double-tap
+    setState(() => _isEnding = true);
+
+    await controller.endCall();
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<CallController>();
+
+    // If the call has ended (e.g. from dispose), stop rendering WebRTC views.
+    if (controller.state == CallState.ended) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.call_end, color: Colors.white54, size: 64),
+                const SizedBox(height: 16),
+                const Text('Call Ended',
+                    style: TextStyle(color: Colors.white54, fontSize: 18)),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Back to Home'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final webrtc = controller.webrtc;
 
     return Scaffold(
@@ -51,7 +94,10 @@ class _CallView extends StatelessWidget {
           children: [
             // Remote video background
             Positioned.fill(
-              child: _RemoteView(renderer: webrtc.remoteRenderer),
+              child: _RemoteView(
+                renderer: webrtc.remoteRenderer,
+                isConnected: controller.remoteConnected,
+              ),
             ),
 
             // Local floating preview
@@ -70,10 +116,7 @@ class _CallView extends StatelessWidget {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () async {
-                      await controller.endCall();
-                      if (context.mounted) Navigator.pop(context);
-                    },
+                    onPressed: () => _handleEndCall(controller),
                   ),
                   const Spacer(),
                   _StatusPill(state: controller.state),
@@ -84,7 +127,7 @@ class _CallView extends StatelessWidget {
             ),
 
             // Call ID banner (visible while waiting for peer)
-            if (controller.callId != null && webrtc.remoteRenderer.srcObject == null)
+            if (controller.callId != null && !controller.remoteConnected)
               Positioned(
                 top: 70,
                 left: 16,
@@ -117,10 +160,7 @@ class _CallView extends StatelessWidget {
                 isMuted: controller.isMuted,
                 onToggleMute: controller.toggleMute,
                 onSwitchCamera: controller.switchCamera,
-                onEndCall: () async {
-                  await controller.endCall();
-                  if (context.mounted) Navigator.pop(context);
-                },
+                onEndCall: () => _handleEndCall(controller),
               ),
             ),
           ],
@@ -138,38 +178,70 @@ class _CallIdBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black.withOpacity(0.6),
-      borderRadius: BorderRadius.circular(12),
+      color: Colors.black.withOpacity(0.7),
+      borderRadius: BorderRadius.circular(14),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.share, color: Colors.white70, size: 18),
-            const SizedBox(width: 8),
-            const Text('Call ID:',
-                style: TextStyle(color: Colors.white70, fontSize: 12)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                callId,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'monospace',
+            const Row(
+              children: [
+                Icon(Icons.link, color: Colors.white70, size: 16),
+                SizedBox(width: 6),
+                Text(
+                  'Share this Call ID with your peer:',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
+              ],
             ),
-            IconButton(
-              tooltip: 'Copy',
-              icon: const Icon(Icons.copy, color: Colors.white70, size: 18),
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: callId));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Call ID copied')),
-                  );
-                }
-              },
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SelectableText(
+                      callId,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Material(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () async {
+                      await Clipboard.setData(ClipboardData(text: callId));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Call ID copied to clipboard!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(Icons.copy, color: Colors.white, size: 20),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -181,11 +253,12 @@ class _CallIdBanner extends StatelessWidget {
 // ── Remote view ──
 class _RemoteView extends StatelessWidget {
   final RTCVideoRenderer renderer;
-  const _RemoteView({required this.renderer});
+  final bool isConnected;
+  const _RemoteView({required this.renderer, required this.isConnected});
 
   @override
   Widget build(BuildContext context) {
-    if (renderer.srcObject == null) {
+    if (!isConnected) {
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

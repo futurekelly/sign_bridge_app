@@ -1,0 +1,5 @@
+hello
+thank_you
+help
+yes
+no

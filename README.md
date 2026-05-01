@@ -12,7 +12,8 @@ A Flutter-based sign language communication platform using Firebase and WebRTC.
 - Firebase
 - WebRTC
 
-developed by futureTech.
-techstack dev:
-1.kelvin e mbise
-2.evance e manyanga
+##developed by futureTech.
+##techstack dev:
+-1.kelvin e mbise
+
+-2.evance e manyanga

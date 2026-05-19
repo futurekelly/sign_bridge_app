@@ -1,13 +1,14 @@
-// CallController (Phase 5 → Phase 6)
-// ─────────────────────────────────────────────────────────────
-// Owns the WebRTC call lifecycle + the TranslationController.
-// Phase 6: DataChannel is now wired for real-time translation sync.
+// CallController (Phase 6 + Upgrade)
+// Owns the WebRTC call lifecycle + TranslationController.
+// Now saves recent calls on end.
 
 import 'package:flutter/foundation.dart';
 import '../services/auth/auth_service.dart';
 import '../services/webrtc/webrtc_service.dart';
 import '../services/webrtc/signaling_service.dart';
 import '../core/utils/permissions.dart';
+import '../data/models/recent_call.dart';
+import '../data/repositories/recent_calls_repository.dart';
 import 'translation_controller.dart';
 
 enum CallState { idle, connecting, inCall, ended, error }
@@ -15,6 +16,7 @@ enum CallState { idle, connecting, inCall, ended, error }
 class CallController extends ChangeNotifier {
   final WebRTCService webrtc = WebRTCService();
   final AuthService _auth = AuthService();
+  final RecentCallsRepository _recentRepo = RecentCallsRepository();
 
   // AI orchestrator owned by the call.
   final TranslationController translation = TranslationController();
@@ -33,14 +35,13 @@ class CallController extends ChangeNotifier {
   bool _isMuted = false;
   bool get isMuted => _isMuted;
 
-  /// True once the remote peer's video stream has been received.
-  /// The UI uses this instead of checking renderer.srcObject directly,
-  /// which doesn't trigger rebuilds.
   bool _remoteConnected = false;
   bool get remoteConnected => _remoteConnected;
 
-  /// Guard to prevent double-dispose / double-end.
   bool _disposed = false;
+
+  /// Tracks when the call started for duration calculation.
+  DateTime? _callStartTime;
 
   // ─────────────────────────────────────────────
   // ENTRY POINTS
@@ -55,6 +56,7 @@ class CallController extends ChangeNotifier {
         selfId: _auth.currentUser!.uid,
       );
       _callId = await _signaling!.createCall();
+      _callStartTime = DateTime.now();
       _setState(CallState.inCall);
       _startTranslation();
       return _callId;
@@ -74,6 +76,7 @@ class CallController extends ChangeNotifier {
       );
       await _signaling!.joinCall(callId);
       _callId = callId;
+      _callStartTime = DateTime.now();
       _setState(CallState.inCall);
       _startTranslation();
       return true;
@@ -99,7 +102,6 @@ class CallController extends ChangeNotifier {
       await webrtc.initialize();
       await webrtc.createPeerConnection_();
 
-      // Listen for the remote stream and notify UI when it arrives.
       webrtc.onRemoteStreamAdded = () {
         _remoteConnected = true;
         notifyListeners();
@@ -112,12 +114,9 @@ class CallController extends ChangeNotifier {
     }
   }
 
-  /// Starts the AI pipeline and wires DataChannel (Phase 6).
   void _startTranslation() {
-    // Phase 6: wire DataChannel ↔ TranslationController.
     webrtc.onDataChannelMessage = translation.handleIncomingPeerJson;
     translation.onOutgoing = webrtc.sendDataChannelMessage;
-
     translation.start();
   }
 
@@ -133,11 +132,13 @@ class CallController extends ChangeNotifier {
 
   Future<void> switchCamera() async => webrtc.switchCamera();
 
-  /// Ends the call safely. Sets state BEFORE disposing resources
-  /// so the UI can react and stop rendering WebRTC views first.
+  /// Ends the call safely and saves to recent calls.
   Future<void> endCall() async {
     if (_disposed) return;
     _disposed = true;
+
+    // Save to recent calls before cleanup.
+    await _saveRecentCall();
 
     // 1) Signal UI to stop rendering immediately.
     _setState(CallState.ended);
@@ -148,8 +149,28 @@ class CallController extends ChangeNotifier {
     // 3) End signaling.
     try { await _signaling?.endCall(); } catch (_) {}
 
-    // 4) Dispose WebRTC resources last (renderers, streams, connection).
+    // 4) Dispose WebRTC resources last.
     try { await webrtc.dispose(); } catch (_) {}
+  }
+
+  // ─────────────────────────────────────────────
+  // RECENT CALLS
+  // ─────────────────────────────────────────────
+
+  Future<void> _saveRecentCall() async {
+    if (_callId == null) return;
+    try {
+      int? duration;
+      if (_callStartTime != null) {
+        duration = DateTime.now().difference(_callStartTime!).inSeconds;
+      }
+      await _recentRepo.save(RecentCall(
+        callId: _callId!,
+        partnerName: null, // Could be fetched from Firestore call doc
+        partnerRole: null,
+        durationSeconds: duration,
+      ));
+    } catch (_) { /* best-effort */ }
   }
 
   // ─────────────────────────────────────────────
@@ -168,7 +189,6 @@ class CallController extends ChangeNotifier {
 
   @override
   void dispose() {
-    // If endCall wasn't called explicitly, clean up now.
     if (!_disposed) {
       _disposed = true;
       _signaling?.dispose();

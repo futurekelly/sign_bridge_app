@@ -1,8 +1,11 @@
 // Root application widget.
-// Sets up MaterialApp, theme, and the named-route system.
-// Chooses initial route based on onboarding and auth state.
+// Sets up MaterialApp with MultiProvider for theme + accessibility,
+// dark/light theme switching, and the named-route system.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'controllers/theme_controller.dart';
+import 'controllers/accessibility_controller.dart';
 import 'core/theme.dart';
 import 'core/routes.dart';
 import 'core/constants.dart';
@@ -20,12 +23,22 @@ class SignBridgeApp extends StatelessWidget {
         ? AppRoutes.login
         : AppRoutes.onboarding;
 
-    return MaterialApp(
-      title: AppConstants.appName,
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      initialRoute: initialRoute,
-      routes: AppRoutes.routes,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeController()),
+        ChangeNotifierProvider(create: (_) => AccessibilityController()),
+      ],
+      child: Consumer<ThemeController>(
+        builder: (_, themeCtrl, __) => MaterialApp(
+          title: AppConstants.appName,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeCtrl.themeMode,
+          initialRoute: initialRoute,
+          routes: AppRoutes.routes,
+        ),
+      ),
     );
   }
 }

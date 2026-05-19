@@ -1,22 +1,20 @@
-// OnboardingScreen — 3-page intro shown once on first launch.
-// Users can skip or complete it. Stores a flag in Hive so it
-// never shows again.
+// OnboardingScreen — 4-page intro with accessibility page.
+// Redesigned with modern styling and smooth transitions.
 
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import '../../core/theme.dart';
+import '../../core/spacing.dart';
 import '../../core/routes.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
-  /// Check whether onboarding has been completed.
   static bool get hasSeenOnboarding {
     final box = Hive.box('app_settings');
     return box.get('hasSeenOnboarding', defaultValue: false) as bool;
   }
 
-  /// Mark onboarding as complete.
   static Future<void> markComplete() async {
     final box = Hive.box('app_settings');
     await box.put('hasSeenOnboarding', true);
@@ -33,7 +31,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static const _pages = [
     _PageData(
       icon: Icons.sign_language,
-      iconColor: AppTheme.primary,
+      iconColor: AppColors.primary,
       title: 'Welcome to SignBridge',
       description:
           'A two-way sign language recognition and speech translation '
@@ -42,7 +40,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
     _PageData(
       icon: Icons.video_call,
-      iconColor: AppTheme.secondary,
+      iconColor: AppColors.secondary,
       title: 'Real-Time Video Calls',
       description:
           'Create or join a video call with a unique Call ID. Share the '
@@ -51,12 +49,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
     _PageData(
       icon: Icons.auto_awesome,
-      iconColor: Colors.purple,
+      iconColor: AppColors.accent,
       title: 'AI-Powered Translation',
       description:
           'Sign language gestures are recognized and converted to text '
           'and speech. Spoken words are converted to text and sign '
           'language GIFs. All processing happens on your phone!',
+    ),
+    _PageData(
+      icon: Icons.accessibility_new,
+      iconColor: Color(0xFFF59E0B),
+      title: 'Adaptive Accessibility',
+      description:
+          'Choose your role — Deaf, Hearing, or Both — and the app '
+          'adapts automatically. Visual captions, sign language GIFs, '
+          'voice controls, and visual notifications adjust to your needs.',
     ),
   ];
 
@@ -86,26 +93,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            // ── Skip button ──
+            // Skip button
             Align(
               alignment: Alignment.topRight,
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 child: TextButton(
                   onPressed: _finish,
-                  child: const Text(
-                    'Skip',
-                    style: TextStyle(color: AppTheme.textMuted, fontSize: 15),
-                  ),
+                  child: Text('Skip',
+                      style: TextStyle(
+                          color: theme.textTheme.bodySmall?.color,
+                          fontSize: 15)),
                 ),
               ),
             ),
 
-            // ── Pages ──
+            // Pages
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -115,13 +124,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // ── Dots + button ──
+            // Dots + button
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Page indicator dots
                   Row(
                     children: List.generate(
                       _pages.length,
@@ -132,15 +141,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         height: 8,
                         decoration: BoxDecoration(
                           color: _currentPage == i
-                              ? AppTheme.primary
-                              : AppTheme.primary.withOpacity(0.2),
+                              ? AppColors.primary
+                              : AppColors.primary.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                     ),
                   ),
-
-                  // Next / Get Started button
                   ElevatedButton(
                     onPressed: _next,
                     style: ElevatedButton.styleFrom(
@@ -163,62 +170,53 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-// ── Page data model ──
 class _PageData {
   final IconData icon;
   final Color iconColor;
   final String title;
   final String description;
-
   const _PageData({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.description,
+    required this.icon, required this.iconColor,
+    required this.title, required this.description,
   });
 }
 
-// ── Individual onboarding page ──
 class _OnboardingPage extends StatelessWidget {
   final _PageData data;
   const _OnboardingPage({required this.data});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 120,
-            height: 120,
+            width: 120, height: 120,
             decoration: BoxDecoration(
-              color: data.iconColor.withOpacity(0.1),
               shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  data.iconColor.withValues(alpha: 0.15),
+                  data.iconColor.withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
             child: Icon(data.icon, size: 56, color: data.iconColor),
           ),
           const SizedBox(height: 40),
-          Text(
-            data.title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textDark,
-            ),
-          ),
+          Text(data.title, textAlign: TextAlign.center,
+              style: theme.textTheme.headlineMedium),
           const SizedBox(height: 16),
-          Text(
-            data.description,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 15,
-              color: AppTheme.textMuted,
-              height: 1.5,
-            ),
-          ),
+          Text(data.description, textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.textTheme.bodySmall?.color,
+                height: 1.5,
+              )),
         ],
       ),
     );

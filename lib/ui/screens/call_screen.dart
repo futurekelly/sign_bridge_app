@@ -1,27 +1,30 @@
-// CallScreen (Phase 6)
-// Shows WebRTC video call with Call ID banner, remote/local video,
-// and controls. Uses controller state for all rendering decisions.
+// CallScreen — WebRTC video call with role-based overlays.
+// GIF panel, captions, AI status adapt based on user role.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/call_controller.dart';
+import '../../controllers/accessibility_controller.dart';
+import '../../core/enums.dart';
+
+import '../../core/theme.dart';
 import '../widgets/call_controls.dart';
-import 'home_screen.dart' show CallArgs, CallRole;
+import '../widgets/gif_overlay.dart';
+import '../widgets/caption_overlay.dart';
+import '../widgets/ai_status_indicator.dart';
 
 class CallScreen extends StatelessWidget {
   const CallScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final args =
-        ModalRoute.of(context)?.settings.arguments as CallArgs?;
+    final args = ModalRoute.of(context)?.settings.arguments as CallArgs?;
 
     return ChangeNotifierProvider(
       create: (_) {
         final c = CallController();
-        // Kick off correct flow once provider is ready.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (args == null || args.role == CallRole.caller) {
             c.startAsCaller();
@@ -38,7 +41,6 @@ class CallScreen extends StatelessWidget {
 
 class _CallView extends StatefulWidget {
   const _CallView();
-
   @override
   State<_CallView> createState() => _CallViewState();
 }
@@ -47,20 +49,19 @@ class _CallViewState extends State<_CallView> {
   bool _isEnding = false;
 
   Future<void> _handleEndCall(CallController controller) async {
-    if (_isEnding) return; // guard against double-tap
+    if (_isEnding) return;
     setState(() => _isEnding = true);
-
     await controller.endCall();
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<CallController>();
+    final a11y = context.watch<AccessibilityController>();
+    final role = a11y.role;
 
-    // If the call has ended (e.g. from dispose), stop rendering WebRTC views.
+    // Call ended state
     if (controller.state == CallState.ended) {
       return Scaffold(
         backgroundColor: Colors.black,
@@ -92,7 +93,7 @@ class _CallViewState extends State<_CallView> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Remote video background
+            // Remote video
             Positioned.fill(
               child: _RemoteView(
                 renderer: webrtc.remoteRenderer,
@@ -100,18 +101,15 @@ class _CallViewState extends State<_CallView> {
               ),
             ),
 
-            // Local floating preview
+            // Local preview
             Positioned(
-              top: 16,
-              right: 16,
+              top: 16, right: 16,
               child: _LocalPreview(renderer: webrtc.localRenderer),
             ),
 
             // Top bar
             Positioned(
-              top: 12,
-              left: 8,
-              right: 8,
+              top: 12, left: 8, right: 8,
               child: Row(
                 children: [
                   IconButton(
@@ -119,6 +117,11 @@ class _CallViewState extends State<_CallView> {
                     onPressed: () => _handleEndCall(controller),
                   ),
                   const Spacer(),
+                  // AI Status indicator
+                  AiStatusIndicator(
+                    statusStream: controller.translation.statusStream,
+                  ),
+                  const SizedBox(width: 8),
                   _StatusPill(state: controller.state),
                   const Spacer(),
                   const SizedBox(width: 48),
@@ -126,12 +129,10 @@ class _CallViewState extends State<_CallView> {
               ),
             ),
 
-            // Call ID banner (visible while waiting for peer)
+            // Call ID banner
             if (controller.callId != null && !controller.remoteConnected)
               Positioned(
-                top: 70,
-                left: 16,
-                right: 16,
+                top: 70, left: 16, right: 16,
                 child: _CallIdBanner(callId: controller.callId!),
               ),
 
@@ -142,7 +143,7 @@ class _CallViewState extends State<_CallView> {
                   margin: const EdgeInsets.all(24),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.85),
+                    color: AppColors.error.withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -153,6 +154,22 @@ class _CallViewState extends State<_CallView> {
                 ),
               ),
 
+            // ── Role-based overlays ──
+
+            // GIF overlay (Deaf + Both)
+            GifOverlay(
+              liveStream: controller.translation.liveResultStream,
+              userRole: role,
+            ),
+
+            // Caption overlay (Deaf + Both, or if enabled in settings)
+            CaptionOverlay(
+              liveStream: controller.translation.liveResultStream,
+              userRole: role,
+              fontSize: a11y.captionFontSize,
+              enabled: a11y.captionsEnabled,
+            ),
+
             // Bottom controls
             Align(
               alignment: Alignment.bottomCenter,
@@ -161,6 +178,7 @@ class _CallViewState extends State<_CallView> {
                 onToggleMute: controller.toggleMute,
                 onSwitchCamera: controller.switchCamera,
                 onEndCall: () => _handleEndCall(controller),
+                userRole: role,
               ),
             ),
           ],
@@ -170,7 +188,7 @@ class _CallViewState extends State<_CallView> {
   }
 }
 
-// ── Call ID banner with copy-to-clipboard ──
+// ── Call ID Banner ──
 class _CallIdBanner extends StatelessWidget {
   final String callId;
   const _CallIdBanner({required this.callId});
@@ -178,7 +196,7 @@ class _CallIdBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black.withOpacity(0.7),
+      color: Colors.black.withValues(alpha: 0.7),
       borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -186,63 +204,47 @@ class _CallIdBanner extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Row(
-              children: [
-                Icon(Icons.link, color: Colors.white70, size: 16),
-                SizedBox(width: 6),
-                Text(
-                  'Share this Call ID with your peer:',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ],
-            ),
+            Row(children: [
+              Icon(Icons.link, color: Colors.white.withValues(alpha: 0.7), size: 16),
+              const SizedBox(width: 6),
+              Text('Share this Call ID with your peer:',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12)),
+            ]),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: SelectableText(
-                      callId,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'monospace',
-                        fontSize: 13,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Material(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  child: InkWell(
+            Row(children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    onTap: () async {
-                      await Clipboard.setData(ClipboardData(text: callId));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Call ID copied to clipboard!'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Icon(Icons.copy, color: Colors.white, size: 20),
-                    ),
+                  ),
+                  child: SelectableText(callId, style: const TextStyle(
+                    color: Colors.white, fontFamily: 'monospace',
+                    fontSize: 13, letterSpacing: 0.5)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Material(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () async {
+                    await Clipboard.setData(ClipboardData(text: callId));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Call ID copied!'),
+                            duration: Duration(seconds: 2)));
+                    }
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Icon(Icons.copy, color: Colors.white, size: 20),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ]),
           ],
         ),
       ),
@@ -250,7 +252,7 @@ class _CallIdBanner extends StatelessWidget {
   }
 }
 
-// ── Remote view ──
+// ── Remote View ──
 class _RemoteView extends StatelessWidget {
   final RTCVideoRenderer renderer;
   final bool isConnected;
@@ -276,7 +278,7 @@ class _RemoteView extends StatelessWidget {
   }
 }
 
-// ── Local preview ──
+// ── Local Preview ──
 class _LocalPreview extends StatelessWidget {
   final RTCVideoRenderer renderer;
   const _LocalPreview({required this.renderer});
@@ -284,61 +286,47 @@ class _LocalPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 110,
-      height: 160,
+      width: 110, height: 160,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white24, width: 1),
         color: Colors.black,
       ),
       clipBehavior: Clip.antiAlias,
-      child: RTCVideoView(
-        renderer,
-        mirror: true,
-        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-      ),
+      child: RTCVideoView(renderer, mirror: true,
+          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
     );
   }
 }
 
-// ── Status pill ──
+// ── Status Pill ──
 class _StatusPill extends StatelessWidget {
   final CallState state;
   const _StatusPill({required this.state});
 
   @override
   Widget build(BuildContext context) {
-    String label;
-    Color color;
-    switch (state) {
-      case CallState.idle:
-        label = 'Idle'; color = Colors.grey; break;
-      case CallState.connecting:
-        label = 'Connecting…'; color = Colors.orange; break;
-      case CallState.inCall:
-        label = 'In Call'; color = Colors.greenAccent; break;
-      case CallState.ended:
-        label = 'Ended'; color = Colors.grey; break;
-      case CallState.error:
-        label = 'Error'; color = Colors.redAccent; break;
-    }
+    final (label, color) = switch (state) {
+      CallState.idle => ('Idle', Colors.grey),
+      CallState.connecting => ('Connecting…', Colors.orange),
+      CallState.inCall => ('In Call', Colors.greenAccent),
+      CallState.ended => ('Ended', Colors.grey),
+      CallState.error => ('Error', Colors.redAccent),
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.18),
+        color: color.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.6)),
+        border: Border.all(color: color.withValues(alpha: 0.6)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 8, height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
+          Container(width: 8, height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 8),
-          Text(label,
-              style: const TextStyle(color: Colors.white, fontSize: 12)),
+          Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
         ],
       ),
     );

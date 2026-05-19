@@ -1,13 +1,16 @@
-// CallControls — bottom action bar for the CallScreen.
-// Pure presentational widget; receives callbacks from CallController.
+// CallControls — bottom action bar for CallScreen.
+// Now role-aware: adapts visibility based on UserRole.
 
 import 'package:flutter/material.dart';
+import '../../core/enums.dart';
+import '../../core/utils/accessibility.dart';
 
 class CallControls extends StatelessWidget {
   final bool isMuted;
   final VoidCallback onToggleMute;
   final VoidCallback onSwitchCamera;
   final VoidCallback onEndCall;
+  final UserRole userRole;
 
   const CallControls({
     super.key,
@@ -15,21 +18,25 @@ class CallControls extends StatelessWidget {
     required this.onToggleMute,
     required this.onSwitchCamera,
     required this.onEndCall,
+    this.userRole = UserRole.both,
   });
 
   @override
   Widget build(BuildContext context) {
+    final showMic = AccessibilityHelper.shouldShowMicControls(userRole);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _CircleBtn(
-            icon: isMuted ? Icons.mic_off : Icons.mic,
-            label: isMuted ? 'Unmute' : 'Mute',
-            color: isMuted ? Colors.orange : Colors.white24,
-            onTap: onToggleMute,
-          ),
+          if (showMic)
+            _CircleBtn(
+              icon: isMuted ? Icons.mic_off : Icons.mic,
+              label: isMuted ? 'Unmute' : 'Mute',
+              color: isMuted ? Colors.orange : Colors.white24,
+              onTap: onToggleMute,
+            ),
           _CircleBtn(
             icon: Icons.call_end,
             label: 'End',
@@ -54,10 +61,8 @@ class _CircleBtn extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   const _CircleBtn({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
+    required this.icon, required this.label,
+    required this.color, required this.onTap,
   });
 
   @override

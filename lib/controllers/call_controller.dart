@@ -1,6 +1,19 @@
 // CallController (Phase 6 + Upgrade)
 // Owns the WebRTC call lifecycle + TranslationController.
 // Now saves recent calls on end.
+//
+// ── Fix (May 2026) ──────────────────────────────────────────
+// • Translation pipeline now starts ONLY after the remote peer's
+//   video stream arrives (onRemoteStreamAdded callback), NOT at
+//   call setup time. This ensures:
+//     - Mic (STT) is not active while "Waiting for peer..." screen shows
+//     - Camera gesture pipeline is not running before P2P is confirmed
+//     - No spurious AI output before both users are connected
+// • Added _translationStarted guard so the pipeline can't start twice
+//   even if onRemoteStreamAdded fires more than once (e.g. on
+//   track renegotiation).
+// • DataChannel callbacks are wired in _bootstrap() (early), so
+//   incoming peer messages are never missed once the DataChannel opens.
 
 import 'package:flutter/foundation.dart';
 import '../services/auth/auth_service.dart';
@@ -40,14 +53,22 @@ class CallController extends ChangeNotifier {
 
   bool _disposed = false;
 
+  /// Language code for AI services ('en' or 'sw').
+  String _languageCode = 'en';
+
   /// Tracks when the call started for duration calculation.
   DateTime? _callStartTime;
+
+  /// Guard: ensures translation.start() is called exactly once,
+  /// even if onRemoteStreamAdded fires multiple times.
+  bool _translationStarted = false;
 
   // ─────────────────────────────────────────────
   // ENTRY POINTS
   // ─────────────────────────────────────────────
 
-  Future<String?> startAsCaller() async {
+  Future<String?> startAsCaller({String languageCode = 'en'}) async {
+    _languageCode = languageCode;
     final ok = await _bootstrap();
     if (!ok) return null;
     try {
@@ -58,7 +79,7 @@ class CallController extends ChangeNotifier {
       _callId = await _signaling!.createCall();
       _callStartTime = DateTime.now();
       _setState(CallState.inCall);
-      _startTranslation();
+      // Translation starts only when the peer connects (see _bootstrap).
       return _callId;
     } catch (e) {
       _fail('Failed to create call: $e');
@@ -66,7 +87,8 @@ class CallController extends ChangeNotifier {
     }
   }
 
-  Future<bool> startAsCallee(String callId) async {
+  Future<bool> startAsCallee(String callId, {String languageCode = 'en'}) async {
+    _languageCode = languageCode;
     final ok = await _bootstrap();
     if (!ok) return false;
     try {
@@ -78,7 +100,7 @@ class CallController extends ChangeNotifier {
       _callId = callId;
       _callStartTime = DateTime.now();
       _setState(CallState.inCall);
-      _startTranslation();
+      // Translation starts only when the peer connects (see _bootstrap).
       return true;
     } catch (e) {
       _fail('Failed to join call: $e');
@@ -102,9 +124,22 @@ class CallController extends ChangeNotifier {
       await webrtc.initialize();
       await webrtc.createPeerConnection_();
 
+      // Wire DataChannel callbacks early so no messages are missed
+      // once the DataChannel opens (which can happen before remote
+      // video arrives on the callee side).
+      _wireDataChannel();
+
+      // Start the AI translation pipeline ONLY when the remote peer's
+      // video stream has actually arrived — i.e. P2P is confirmed.
       webrtc.onRemoteStreamAdded = () {
         _remoteConnected = true;
         notifyListeners();
+
+        if (!_translationStarted) {
+          _translationStarted = true;
+          debugPrint('[CallController] P2P confirmed — starting translation pipeline (lang: $_languageCode)');
+          translation.start(languageCode: _languageCode);
+        }
       };
 
       return true;
@@ -114,10 +149,13 @@ class CallController extends ChangeNotifier {
     }
   }
 
-  void _startTranslation() {
+  /// Wires the DataChannel message callbacks without starting the AI pipeline.
+  /// Called early in _bootstrap so peer messages received via DataChannel
+  /// are always routed to the TranslationController, regardless of when
+  /// the remote stream arrives.
+  void _wireDataChannel() {
     webrtc.onDataChannelMessage = translation.handleIncomingPeerJson;
     translation.onOutgoing = webrtc.sendDataChannelMessage;
-    translation.start();
   }
 
   // ─────────────────────────────────────────────

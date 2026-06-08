@@ -11,7 +11,7 @@ class AccessibilityHelper {
 
   /// Animated GIF translation panel (sign language visuals).
   static bool shouldShowGifPanel(UserRole role) =>
-      role == UserRole.deaf || role == UserRole.both;
+      role == UserRole.deaf;
 
   /// Real-time captions / subtitles overlay.
   static bool shouldShowCaptions(UserRole role) =>

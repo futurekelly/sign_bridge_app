@@ -2,6 +2,8 @@
 // search bar, filter chips, and replay functionality.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../controllers/accessibility_controller.dart';
 import '../../core/theme.dart';
 import '../../core/spacing.dart';
 import '../../core/routes.dart';
@@ -57,19 +59,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _clear() async {
+    final a11y = context.read<AccessibilityController>();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Clear History'),
-        content: const Text('Delete all translation history?'),
+        title: Text(a11y.t('history.clear')),
+        content: Text(a11y.t('history.clear_confirm')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel')),
+            child: Text(a11y.t('home.cancel'))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Clear All')),
+            child: Text(a11y.t('common.ok'))),
         ],
       ),
     );
@@ -90,14 +93,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final a11y = context.watch<AccessibilityController>();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Translation History'),
+        title: Text(a11y.t('history.title')),
         actions: [
           if (_allItems.isNotEmpty)
             IconButton(
-              tooltip: 'Clear',
+              tooltip: a11y.t('history.clear'),
               icon: const Icon(Icons.delete_outline),
               onPressed: _clear,
             ),
@@ -107,7 +111,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         onPressed: _startNewCall,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_call, color: Colors.white),
-        label: const Text('New Call', style: TextStyle(color: Colors.white)),
+        label: Text(a11y.t('home.create_call'),
+            style: const TextStyle(color: Colors.white)),
       ),
       body: Column(
         children: [
@@ -121,7 +126,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 controller: _searchCtrl,
                 onChanged: (_) => _applyFilters(),
                 decoration: InputDecoration(
-                  hintText: 'Search translations...',
+                  hintText: a11y.t('history.search'),
                   prefixIcon: const Icon(Icons.search, size: 20),
                   suffixIcon: _searchCtrl.text.isNotEmpty
                       ? IconButton(
@@ -148,20 +153,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
             child: Row(
               children: [
                 _FilterChip(
-                  label: 'All',
+                  label: a11y.t('common.ok') == 'OK' ? 'All' : 'Zote',
                   selected: _sourceFilter == 'all',
                   onTap: () { _sourceFilter = 'all'; _applyFilters(); },
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 _FilterChip(
-                  label: 'Gesture',
+                  label: a11y.t('history.gesture'),
                   icon: Icons.sign_language,
                   selected: _sourceFilter == 'gesture',
                   onTap: () { _sourceFilter = 'gesture'; _applyFilters(); },
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 _FilterChip(
-                  label: 'Speech',
+                  label: a11y.t('history.speech'),
                   icon: Icons.mic,
                   selected: _sourceFilter == 'speech',
                   onTap: () { _sourceFilter = 'speech'; _applyFilters(); },
@@ -306,10 +311,10 @@ class _EmptyState extends StatelessWidget {
             Icon(Icons.history_toggle_off, size: 72,
                 color: Theme.of(context).textTheme.bodySmall?.color),
             const SizedBox(height: 16),
-            Text('No translation history yet',
+            Text(context.read<AccessibilityController>().t('history.empty'),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
-            Text('Run a call to generate translation entries.',
+            Text(context.read<AccessibilityController>().t('history.empty_desc'),
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall),
           ],

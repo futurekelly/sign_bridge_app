@@ -46,6 +46,14 @@ class LearningRepository {
   // ── Hardcoded resource catalog ──
   static const List<LearningResource> _resources = [
     LearningResource(
+      id: 'tsl_basics',
+      title: 'Tanzanian Sign Language Basics',
+      description: 'Introduction to Lugha ya Alama ya Tanzania (LAT) — foundational signs.',
+      pdfUrl: 'https://share.google/dxH2kkFRMGz0c7Y1g',
+      category: 'Regional',
+      icon: Icons.language,
+    ),
+    LearningResource(
       id: 'asl_alphabet',
       title: 'ASL Alphabet Guide',
       description: 'Learn all 26 letters of the American Sign Language alphabet with illustrations.',
@@ -100,14 +108,6 @@ class LearningRepository {
       pdfUrl: 'https://www.nidcd.nih.gov/health/american-sign-language',
       category: 'Emergency',
       icon: Icons.local_hospital,
-    ),
-    LearningResource(
-      id: 'tsl_basics',
-      title: 'Tanzanian Sign Language Basics',
-      description: 'Introduction to Lugha ya Alama ya Tanzania (LAT) — foundational signs.',
-      pdfUrl: 'https://www.ethnologue.com/language/tza/',
-      category: 'Regional',
-      icon: Icons.language,
     ),
   ];
 }

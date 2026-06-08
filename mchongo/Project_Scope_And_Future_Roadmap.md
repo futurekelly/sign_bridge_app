@@ -9,6 +9,7 @@
 SignBridge is a Flutter application designed for **Two-Way Sign Language Recognition and Speech Translation**. It facilitates communication between Deaf and Hearing individuals via WebRTC video calls, augmented by on-device AI.
 
 ### Core Architecture & Features Implemented:
+*   **OAuth & Real Authentication**: Overhauled auth services using `google_sign_in` and email/password capabilities. Rebuilt the login screen with a premium glassmorphic visual style, neumorphic input fields, and smooth sliding tabs.
 *   **Role-Based Accessibility Engine**: Users select their role (Deaf, Hearing, Both). The UI dynamically adapts based on this role (e.g., muting the mic by default for Deaf users, enabling/disabling GIF panels, prioritizing captions).
 *   **WebRTC P2P Calling**: Full video calling implementation using `flutter_webrtc`. Firestore is used purely for signaling (exchanging SDP offers/answers and ICE candidates).
 *   **Real-Time Call Overlays**: Custom UI overlays that sit on top of the video feed:
@@ -16,6 +17,7 @@ SignBridge is a Flutter application designed for **Two-Way Sign Language Recogni
     *   `CaptionOverlay`: Real-time glassmorphic subtitle bar.
     *   `AiStatusIndicator`: A pulsing pill showing the AI state (Listening, Recognizing, etc.).
 *   **Local Storage (Hive)**: Heavy usage of Hive for blazing-fast, offline-first data storage. We store App Settings, Recent Calls, and Translation History locally.
+*   **Learning Resources & Custom Settings**: Configured Tanzanian Sign Language basics (PDF link to Maktaba.org) at the top of the learning resources. Added developer credit for "Sir Kelvin Mbise" on the Settings screen.
 *   **State Management**: `Provider` handles app-wide states (`ThemeController`, `AccessibilityController`) and scoped states (`CallController`).
 *   **Premium UI/UX System**: A completely custom design language featuring:
     *   **Neumorphism**: Soft shadow containers that adapt to both Light and Dark themes.
@@ -25,7 +27,7 @@ SignBridge is a Flutter application designed for **Two-Way Sign Language Recogni
 
 ## 🚀 2. Future Implementation Roadmap (The Next Steps)
 
-The following 6 features are the next priorities. Any AI assisting with this project should adhere to these guidelines to maintain the project's premium aesthetic and clean architecture.
+The following 5 features are the next priorities. Any AI assisting with this project should adhere to these guidelines to maintain the project's premium aesthetic and clean architecture.
 
 ### 2.1. AI Gesture Model & GIF Mapping
 **Goal**: Translate speech to GIF animations for Deaf users, and translate camera gestures to text/speech for Hearing users.
@@ -47,17 +49,12 @@ The following 6 features are the next priorities. Any AI assisting with this pro
     2. **Data Flow**: The feedback should be saved to a `feedbacks` collection in Firebase Firestore. You can then write a simple Firebase Cloud Function that automatically emails `futurekelly360@gmail.com` whenever a new document is added. 
     3. Alternatively, for a completely free no-backend setup, use the `url_launcher` package to open the user's email app with a pre-filled `mailto:` template.
 
-### 2.4. OAuth Integration (Google Login)
-**Goal**: Move away from Anonymous Login to secure, permanent accounts.
-*   **Why it's necessary**: Anonymous accounts are lost if the user uninstalls the app or clears app data. Real OAuth allows users to sync their settings across devices, allows for password resets, and enables you to send them email updates.
-*   **Implementation Strategy**: Integrate `google_sign_in` alongside `firebase_auth`. Update the Login Screen to feature a beautifully styled Neumorphic "Continue with Google" button. 
-
-### 2.5. Custom Logo Loading Animations
+### 2.4. Custom Logo Loading Animations
 **Goal**: Replace standard loading spinners with a highly polished, branded loading animation.
 *   **Implementation Strategy**: We should take the SignBridge logo (the gradient hands) and create a **breathing/pulsing animation** using Flutter's `AnimationController`. 
 *   This animation should be used on the Login Screen when authenticating, and when waiting for the AI model to load into RAM. This vastly elevates the "premium" feel of the app.
 
-### 2.6. Neon Glow UI Effects
+### 2.5. Neon Glow UI Effects
 **Goal**: Add modern "Cyberpunk/Neon" hover and active state effects to specific texts and buttons.
 *   **Implementation Strategy**: We can achieve a Neon effect purely in Flutter using `BoxShadow` (for containers) or `Shadow` (for text) with high blur radiuses and vibrant colors.
 *   **Example**: 
@@ -74,11 +71,11 @@ The following 6 features are the next priorities. Any AI assisting with this pro
       ),
     )
     ```
-*   We will apply this selectively—for example, on the "Get Started" button or when a user's role is actively highlighted, keeping it subtle enough so it doesn't clash with the Neumorphism.
+    We will apply this selectively—for example, on the "Get Started" button or when a user's role is actively highlighted, keeping it subtle enough so it doesn't clash with the Neumorphism.
 
 ---
 
-## 🛠️ 3. Tech Stack Reference
+## 3. Tech Stack Reference
 *   **Framework**: Flutter (Dart)
 *   **Realtime Comm**: `flutter_webrtc`
 *   **Backend**: Firebase (Auth, Firestore for Signaling)

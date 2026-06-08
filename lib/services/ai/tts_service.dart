@@ -12,8 +12,9 @@ class TTSService {
   bool _ready = false;
 
   Future<void> initialize({String language = 'en-US'}) async {
-    if (_ready) return;
+    // Always update language so it can be switched between calls.
     await _tts.setLanguage(language);
+    if (_ready) return;
     await _tts.setSpeechRate(0.5);  // mid-pace, more natural
     await _tts.setVolume(1.0);
     await _tts.setPitch(1.0);

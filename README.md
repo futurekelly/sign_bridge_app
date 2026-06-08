@@ -4,6 +4,7 @@ A highly accessible, AI-powered Flutter application designed to bridge communica
 
 ## 🚀 Key Features (v2.9.9 Update)
 - **Role-Based Accessibility Engine**: Adapts the UI dynamically based on the user's role (Deaf, Hearing, or Both).
+- **Bilingual Support (English & Kiswahili)**: Seamless runtime toggling of English and Swahili translations across onboarding, authentication, dashboard, call, settings, history, and learning screens, persisting settings offline via Hive.
 - **Modern Neumorphic & Glassmorphic UI**: Premium aesthetic with full Light and Dark mode support.
 - **WebRTC Peer-to-Peer Calling**: High-quality, low-latency video calls using Firebase Firestore for signaling.
 - **AI-Powered Call Overlays**:

@@ -89,12 +89,17 @@ class TranslationController extends ChangeNotifier {
   // ─────────────────────────────────────────────
 
   /// Starts the AI pipeline. Idempotent.
-  Future<void> start() async {
+  /// [languageCode] controls STT/TTS locale: 'en' or 'sw'.
+  Future<void> start({String languageCode = 'en'}) async {
     if (_started) return;
     _started = true;
 
-    // Initialize TTS (cheap, no permissions needed beyond what STT/cam have).
-    await _tts.initialize();
+    // Determine locale codes based on language selection.
+    final ttsLang = languageCode == 'sw' ? 'sw-TZ' : 'en-US';
+    final sttLocale = languageCode == 'sw' ? 'sw_TZ' : 'en_US';
+
+    // Initialize TTS with the correct language.
+    await _tts.initialize(language: ttsLang);
 
     // Subscribe to AI service outputs BEFORE starting them
     // so we don't miss the first events.
@@ -104,7 +109,8 @@ class TranslationController extends ChangeNotifier {
     _subs.add(_speech.resultStream.listen(_onSpeechResult));
     _subs.add(_speech.statusStream.listen(_emitStatus));
 
-    // Start both pipelines in parallel — they run independently.
+    // Initialize STT with the correct locale, then start both pipelines.
+    await _speech.initialize(locale: sttLocale);
     await Future.wait([
       _gesture.start(),
       _speech.start(),

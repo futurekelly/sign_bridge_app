@@ -1,8 +1,10 @@
-// OnboardingScreen — 4-page intro with accessibility page.
-// Redesigned with modern styling and smooth transitions.
+// OnboardingScreen — 4-page intro with language toggle and full bilingual support.
+// Language toggle sits in the top-right corner alongside the Skip button.
 
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:provider/provider.dart';
+import '../../controllers/accessibility_controller.dart';
 import '../../core/theme.dart';
 import '../../core/spacing.dart';
 import '../../core/routes.dart';
@@ -28,47 +30,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pageController = PageController();
   int _currentPage = 0;
 
-  static const _pages = [
-    _PageData(
-      icon: Icons.sign_language,
-      iconColor: AppColors.primary,
-      title: 'Welcome to SignBridge',
-      description:
-          'A two-way sign language recognition and speech translation '
-          'system. Bridging communication between deaf and hearing users '
-          'in real-time.',
-    ),
-    _PageData(
-      icon: Icons.video_call,
-      iconColor: AppColors.secondary,
-      title: 'Real-Time Video Calls',
-      description:
-          'Create or join a video call with a unique Call ID. Share the '
-          'ID with your peer to connect instantly. AI translation runs '
-          'on your device — no internet required for processing.',
-    ),
-    _PageData(
-      icon: Icons.auto_awesome,
-      iconColor: AppColors.accent,
-      title: 'AI-Powered Translation',
-      description:
-          'Sign language gestures are recognized and converted to text '
-          'and speech. Spoken words are converted to text and sign '
-          'language GIFs. All processing happens on your phone!',
-    ),
-    _PageData(
-      icon: Icons.accessibility_new,
-      iconColor: Color(0xFFF59E0B),
-      title: 'Adaptive Accessibility',
-      description:
-          'Choose your role — Deaf, Hearing, or Both — and the app '
-          'adapts automatically. Visual captions, sign language GIFs, '
-          'voice controls, and visual notifications adjust to your needs.',
-    ),
+  // Page data as keys — resolved via a11y.t() at build time
+  static const _pageKeys = [
+    ('onboarding.welcome_title', 'onboarding.welcome_desc',
+        Icons.sign_language, AppColors.primary),
+    ('onboarding.video_title', 'onboarding.video_desc',
+        Icons.video_call, AppColors.secondary),
+    ('onboarding.ai_title', 'onboarding.ai_desc',
+        Icons.auto_awesome, AppColors.accent),
+    ('onboarding.access_title', 'onboarding.access_desc',
+        Icons.accessibility_new, Color(0xFFF59E0B)),
   ];
 
-  void _next() {
-    if (_currentPage < _pages.length - 1) {
+  void _next(AccessibilityController a11y) {
+    if (_currentPage < _pageKeys.length - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -80,9 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _finish() async {
     await OnboardingScreen.markComplete();
-    if (mounted) {
-      Navigator.pushReplacementNamed(context, AppRoutes.login);
-    }
+    if (mounted) Navigator.pushReplacementNamed(context, AppRoutes.login);
   }
 
   @override
@@ -94,37 +67,77 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final a11y = context.watch<AccessibilityController>();
+    final lang = a11y.languageCode;
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            // Skip button
-            Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: TextButton(
-                  onPressed: _finish,
-                  child: Text('Skip',
+            // ── Top bar: Language toggle + Skip ──
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Premium language toggle pill
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3)),
+                      color: AppColors.primary.withValues(alpha: 0.05),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _LangButton(
+                          label: 'EN',
+                          active: lang == 'en',
+                          onTap: () => a11y.setLanguageCode('en'),
+                        ),
+                        _LangButton(
+                          label: 'SW',
+                          active: lang == 'sw',
+                          onTap: () => a11y.setLanguageCode('sw'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Skip button
+                  TextButton(
+                    onPressed: _finish,
+                    child: Text(
+                      a11y.t('onboarding.skip'),
                       style: TextStyle(
                           color: theme.textTheme.bodySmall?.color,
-                          fontSize: 15)),
-                ),
+                          fontSize: 15),
+                    ),
+                  ),
+                ],
               ),
             ),
 
-            // Pages
+            // ── Pages ──
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
                 onPageChanged: (i) => setState(() => _currentPage = i),
-                itemCount: _pages.length,
-                itemBuilder: (_, i) => _OnboardingPage(data: _pages[i]),
+                itemCount: _pageKeys.length,
+                itemBuilder: (_, i) {
+                  final (titleKey, descKey, icon, color) = _pageKeys[i];
+                  return _OnboardingPage(
+                    icon: icon,
+                    iconColor: color,
+                    title: a11y.t(titleKey),
+                    description: a11y.t(descKey),
+                  );
+                },
               ),
             ),
 
-            // Dots + button
+            // ── Dots + Next/Get Started button ──
             Padding(
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
@@ -133,7 +146,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: [
                   Row(
                     children: List.generate(
-                      _pages.length,
+                      _pageKeys.length,
                       (i) => AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
                         margin: const EdgeInsets.only(right: 8),
@@ -149,15 +162,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                   ),
                   ElevatedButton(
-                    onPressed: _next,
+                    onPressed: () => _next(a11y),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 28, vertical: 14),
                     ),
                     child: Text(
-                      _currentPage == _pages.length - 1
-                          ? 'Get Started'
-                          : 'Next',
+                      _currentPage == _pageKeys.length - 1
+                          ? a11y.t('onboarding.get_started')
+                          : a11y.t('onboarding.next'),
                     ),
                   ),
                 ],
@@ -170,53 +183,91 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-class _PageData {
+// ── Language toggle button ──
+class _LangButton extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _LangButton(
+      {required this.label, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: active ? Colors.white : AppColors.primary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Single onboarding page ──
+class _OnboardingPage extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final String title;
   final String description;
-  const _PageData({
-    required this.icon, required this.iconColor,
-    required this.title, required this.description,
-  });
-}
 
-class _OnboardingPage extends StatelessWidget {
-  final _PageData data;
-  const _OnboardingPage({required this.data});
+  const _OnboardingPage({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.description,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 120, height: 120,
+            width: 120,
+            height: 120,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
                 colors: [
-                  data.iconColor.withValues(alpha: 0.15),
-                  data.iconColor.withValues(alpha: 0.05),
+                  iconColor.withValues(alpha: 0.15),
+                  iconColor.withValues(alpha: 0.05),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
-            child: Icon(data.icon, size: 56, color: data.iconColor),
+            child: Icon(icon, size: 56, color: iconColor),
           ),
           const SizedBox(height: 40),
-          Text(data.title, textAlign: TextAlign.center,
+          Text(title,
+              textAlign: TextAlign.center,
               style: theme.textTheme.headlineMedium),
           const SizedBox(height: 16),
-          Text(data.description, textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.textTheme.bodySmall?.color,
-                height: 1.5,
-              )),
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.textTheme.bodySmall?.color,
+              height: 1.5,
+            ),
+          ),
         ],
       ),
     );

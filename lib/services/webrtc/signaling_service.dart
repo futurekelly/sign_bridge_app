@@ -20,22 +20,33 @@
 //
 // IMPORTANT: this service knows NOTHING about media or AI.
 // It only moves text JSON through Firestore.
+//
+// ── Fix (May 2026) ──────────────────────────────────────────
+// • Added _answerApplied guard: Firestore doc snapshots fire
+//   every time any field on the call doc is updated (e.g. when
+//   the caller later writes its own ICE candidates sub-collection
+//   changes can sometimes re-trigger the parent listener via
+//   compound queries, or more commonly when calleeId/status is
+//   updated). Without the guard, handleRemoteAnswer() is called
+//   a second time on an already-stable PeerConnection, which
+//   throws an InvalidStateError and breaks the connection.
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../firebase/firestore_service.dart';
 import 'webrtc_service.dart';
-
-enum SignalingRole { caller, callee }
 
 class SignalingService {
   final WebRTCService webrtc;
   final String selfId;
 
-  SignalingRole? _role;
   String? _callId;
   String? get callId => _callId;
+
+  // Guard: ensures handleRemoteAnswer is called exactly once.
+  bool _answerApplied = false;
 
   // Active stream subscriptions to clean up on dispose.
   StreamSubscription? _callDocSub;
@@ -50,7 +61,7 @@ class SignalingService {
   /// CALLER side: creates a new call document and emits an SDP offer.
   /// Returns the generated callId (share this with the peer).
   Future<String> createCall() async {
-    _role = SignalingRole.caller;
+    _answerApplied = false;
 
     // 1) Create a fresh call document.
     final docRef = FirestoreService.callsRef.doc();
@@ -84,8 +95,8 @@ class SignalingService {
 
   /// CALLEE side: joins an existing call by ID.
   Future<void> joinCall(String callId) async {
-    _role = SignalingRole.callee;
     _callId = callId;
+    _answerApplied = false;
     final docRef = FirestoreService.callDoc(callId);
 
     final snap = await docRef.get();
@@ -113,7 +124,7 @@ class SignalingService {
     final data = snap.data();
     final offerMap = data?['offer'];
     if (offerMap == null) {
-      throw Exception('Call has no offer yet');
+      throw Exception('Call has no offer yet — caller may not be ready');
     }
     final offer = RTCSessionDescription(offerMap['sdp'], offerMap['type']);
 
@@ -139,6 +150,7 @@ class SignalingService {
     await _candidatesSub?.cancel();
     _callDocSub = null;
     _candidatesSub = null;
+    _answerApplied = false;
   }
 
   // ─────────────────────────────────────────────
@@ -146,14 +158,27 @@ class SignalingService {
   // ─────────────────────────────────────────────
 
   /// Caller listens for the answer SDP appearing on the call doc.
+  /// Guard: _answerApplied ensures handleRemoteAnswer is called only once,
+  /// even if the Firestore snapshot fires multiple times (e.g. when other
+  /// fields on the doc are updated after the answer is written).
   void _listenForAnswer(DocumentReference<Map<String, dynamic>> docRef) {
     _callDocSub = docRef.snapshots().listen((snap) async {
+      if (_answerApplied) return; // already processed — ignore re-fires
+
       final data = snap.data();
       if (data == null) return;
+
       final answerMap = data['answer'];
       if (answerMap != null) {
-        final answer = RTCSessionDescription(answerMap['sdp'], answerMap['type']);
-        await webrtc.handleRemoteAnswer(answer);
+        _answerApplied = true; // set BEFORE async call to be race-safe
+        debugPrint('[Signaling] Received answer SDP — applying to peer connection');
+        try {
+          final answer = RTCSessionDescription(answerMap['sdp'], answerMap['type']);
+          await webrtc.handleRemoteAnswer(answer);
+        } catch (e) {
+          debugPrint('[Signaling] handleRemoteAnswer error: $e');
+          _answerApplied = false; // allow retry on transient error
+        }
       }
     });
   }

@@ -74,12 +74,12 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text(AppConstants.appName),
         actions: [
           IconButton(
-            tooltip: 'Theme',
+            tooltip: a11y.t('settings.theme'),
             icon: Icon(context.watch<ThemeController>().icon),
             onPressed: () => context.read<ThemeController>().toggleTheme(),
           ),
           IconButton(
-            tooltip: 'Settings',
+            tooltip: a11y.t('settings.title'),
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.pushNamed(context, AppRoutes.settings),
           ),
@@ -98,11 +98,11 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentNav,
         onTap: _onNavTap,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.history_outlined), activeIcon: Icon(Icons.history), label: 'History'),
-          BottomNavigationBarItem(icon: Icon(Icons.menu_book_outlined), activeIcon: Icon(Icons.menu_book), label: 'Learn'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), activeIcon: Icon(Icons.settings), label: 'Settings'),
+        items: [
+          BottomNavigationBarItem(icon: const Icon(Icons.home_outlined), activeIcon: const Icon(Icons.home), label: a11y.t('nav.home')),
+          BottomNavigationBarItem(icon: const Icon(Icons.history_outlined), activeIcon: const Icon(Icons.history), label: a11y.t('nav.history')),
+          BottomNavigationBarItem(icon: const Icon(Icons.menu_book_outlined), activeIcon: const Icon(Icons.menu_book), label: a11y.t('nav.learn')),
+          BottomNavigationBarItem(icon: const Icon(Icons.settings_outlined), activeIcon: const Icon(Icons.settings), label: a11y.t('nav.settings')),
         ],
       ),
       body: SingleChildScrollView(
@@ -117,10 +117,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Welcome, $_displayName 👋',
+                      Text('${a11y.t('home.welcome')}, $_displayName 👋',
                           style: theme.textTheme.headlineMedium),
                       const SizedBox(height: 4),
-                      Text('Start an inclusive video call with real-time translation.',
+                      Text(a11y.t('home.subtitle'),
                           style: theme.textTheme.bodySmall),
                     ],
                   ),
@@ -140,8 +140,8 @@ class _HomeScreenState extends State<HomeScreen> {
             // ── Action Cards ──
             _ActionCard(
               icon: Icons.add_call,
-              title: 'Create Call',
-              subtitle: 'Start a new call and share the ID',
+              title: a11y.t('home.create_call'),
+              subtitle: a11y.t('home.create_call_sub'),
               color: AppColors.primary,
               onTap: () => Navigator.pushNamed(context, AppRoutes.call,
                   arguments: const CallArgs(role: CallRole.caller)),
@@ -150,10 +150,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
             _ActionCard(
               icon: Icons.call_received,
-              title: 'Join Call',
-              subtitle: 'Enter a call ID to join',
+              title: a11y.t('home.join_call'),
+              subtitle: a11y.t('home.join_call_sub'),
               color: AppColors.secondary,
-              onTap: () => _promptJoin(context),
+              onTap: () => _promptJoin(context, a11y),
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            _ActionCard(
+              icon: Icons.people_outline,
+              title: a11y.t('contacts.title'),
+              subtitle: a11y.t('contacts.sub'),
+              color: AppColors.primaryLight,
+              onTap: () => Navigator.pushNamed(context, AppRoutes.contacts),
             ),
 
             // ── Recent Calls ──
@@ -163,14 +173,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Icon(Icons.history, size: 18, color: theme.textTheme.bodySmall?.color),
                   const SizedBox(width: AppSpacing.sm),
-                  Text('Recent Calls', style: theme.textTheme.titleMedium),
+                  Text(a11y.t('home.recent_calls'), style: theme.textTheme.titleMedium),
                   const Spacer(),
                   TextButton(
                     onPressed: () async {
                       await _recentRepo.clear();
                       _loadRecentCalls();
                     },
-                    child: const Text('Clear', style: TextStyle(fontSize: 12)),
+                    child: Text(a11y.t('home.clear'), style: const TextStyle(fontSize: 12)),
                   ),
                 ],
               ),
@@ -190,8 +200,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
             _ActionCard(
               icon: Icons.history,
-              title: 'Translation History',
-              subtitle: 'View past conversations',
+              title: a11y.t('home.history'),
+              subtitle: a11y.t('home.history_sub'),
               color: AppColors.accent,
               onTap: () => Navigator.pushNamed(context, AppRoutes.history),
             ),
@@ -199,8 +209,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
             _ActionCard(
               icon: Icons.menu_book,
-              title: 'Learning Resources',
-              subtitle: 'Sign language guides & materials',
+              title: a11y.t('home.learning'),
+              subtitle: a11y.t('home.learning_sub'),
               color: AppColors.warning,
               onTap: () => Navigator.pushNamed(context, AppRoutes.learning),
             ),
@@ -211,27 +221,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _promptJoin(BuildContext context) async {
+  Future<void> _promptJoin(BuildContext context, AccessibilityController a11y) async {
     final controller = TextEditingController();
     final id = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Join Call'),
+        title: Text(a11y.t('home.join_call')),
         content: SingleChildScrollView(
           child: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Call ID',
-              hintText: 'Paste the call ID here',
+            decoration: InputDecoration(
+              labelText: a11y.t('home.call_id'),
+              hintText: a11y.t('home.call_id_hint'),
             ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(a11y.t('home.cancel'))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Join'),
+            child: Text(a11y.t('home.join')),
           ),
         ],
       ),
@@ -257,7 +267,7 @@ class _UserIdCard extends StatelessWidget {
         children: [
           const Icon(Icons.badge_outlined, color: AppColors.primary, size: 20),
           const SizedBox(width: 10),
-          Text('Your ID:', style: TextStyle(
+          Text(context.read<AccessibilityController>().t('home.your_id'), style: TextStyle(
             color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 13)),
           const SizedBox(width: 8),
           Text(shortId, style: const TextStyle(
@@ -269,8 +279,9 @@ class _UserIdCard extends StatelessWidget {
             onTap: () async {
               await Clipboard.setData(ClipboardData(text: shortId));
               if (context.mounted) {
+                final a11y = context.read<AccessibilityController>();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('User ID copied!'), duration: Duration(seconds: 2)));
+                  SnackBar(content: Text(a11y.t('home.id_copied')), duration: const Duration(seconds: 2)));
               }
             },
             child: const Padding(

@@ -21,15 +21,16 @@ class CallScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments as CallArgs?;
+    final langCode = context.read<AccessibilityController>().languageCode;
 
     return ChangeNotifierProvider(
       create: (_) {
         final c = CallController();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (args == null || args.role == CallRole.caller) {
-            c.startAsCaller();
+            c.startAsCaller(languageCode: langCode);
           } else {
-            c.startAsCallee(args.callId!);
+            c.startAsCallee(args.callId!, languageCode: langCode);
           }
         });
         return c;
@@ -72,12 +73,12 @@ class _CallViewState extends State<_CallView> {
               children: [
                 const Icon(Icons.call_end, color: Colors.white54, size: 64),
                 const SizedBox(height: 16),
-                const Text('Call Ended',
-                    style: TextStyle(color: Colors.white54, fontSize: 18)),
+                Text(a11y.t('call.ended'),
+                    style: const TextStyle(color: Colors.white54, fontSize: 18)),
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Back to Home'),
+                  child: Text(a11y.t('nav.home')),
                 ),
               ],
             ),
@@ -195,6 +196,7 @@ class _CallIdBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final a11y = context.watch<AccessibilityController>();
     return Material(
       color: Colors.black.withValues(alpha: 0.7),
       borderRadius: BorderRadius.circular(14),
@@ -207,7 +209,7 @@ class _CallIdBanner extends StatelessWidget {
             Row(children: [
               Icon(Icons.link, color: Colors.white.withValues(alpha: 0.7), size: 16),
               const SizedBox(width: 6),
-              Text('Share this Call ID with your peer:',
+              Text(a11y.t('call.share_id'),
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12)),
             ]),
             const SizedBox(height: 8),
@@ -234,8 +236,8 @@ class _CallIdBanner extends StatelessWidget {
                     await Clipboard.setData(ClipboardData(text: callId));
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Call ID copied!'),
-                            duration: Duration(seconds: 2)));
+                        SnackBar(content: Text(a11y.t('call.copied')),
+                            duration: const Duration(seconds: 2)));
                     }
                   },
                   child: const Padding(
@@ -260,15 +262,16 @@ class _RemoteView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final a11y = context.watch<AccessibilityController>();
     if (!isConnected) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(color: Colors.white24),
-            SizedBox(height: 16),
-            Text('Waiting for peer to join...',
-                style: TextStyle(color: Colors.white54)),
+            const CircularProgressIndicator(color: Colors.white24),
+            const SizedBox(height: 16),
+            Text(a11y.t('call.waiting'),
+                style: const TextStyle(color: Colors.white54)),
           ],
         ),
       );
@@ -306,12 +309,13 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final a11y = context.watch<AccessibilityController>();
     final (label, color) = switch (state) {
       CallState.idle => ('Idle', Colors.grey),
-      CallState.connecting => ('Connecting…', Colors.orange),
-      CallState.inCall => ('In Call', Colors.greenAccent),
-      CallState.ended => ('Ended', Colors.grey),
-      CallState.error => ('Error', Colors.redAccent),
+      CallState.connecting => (a11y.t('call.connecting'), Colors.orange),
+      CallState.inCall => (a11y.t('call.connected'), Colors.greenAccent),
+      CallState.ended => (a11y.t('call.ended'), Colors.grey),
+      CallState.error => (a11y.t('call.error'), Colors.redAccent),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

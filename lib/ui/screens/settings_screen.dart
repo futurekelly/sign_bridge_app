@@ -1,8 +1,9 @@
-// SettingsScreen — profile, role selection, theme, accessibility prefs.
-// Uses neumorphic section cards for a modern premium feel.
+// SettingsScreen — profile, role, theme, language, captions, notifications, about.
+// Fully localized (EN / SW). Language toggle uses SegmentedButton.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../controllers/theme_controller.dart';
 import '../../controllers/accessibility_controller.dart';
 import '../../core/enums.dart';
@@ -43,25 +44,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final themeCtrl = context.watch<ThemeController>();
-    final a11yCtrl = context.watch<AccessibilityController>();
+    final a11y = context.watch<AccessibilityController>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
+      appBar: AppBar(title: Text(a11y.t('settings.title'))),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          // ── Profile Section ──
+          // ── Profile ──
           _SectionCard(
-            title: 'Profile',
+            title: a11y.t('settings.profile'),
             icon: Icons.person_outline,
             children: [
               ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                  backgroundColor:
+                      AppColors.primary.withValues(alpha: 0.12),
                   child: Text(
-                    _displayName.isNotEmpty ? _displayName[0].toUpperCase() : '?',
+                    _displayName.isNotEmpty
+                        ? _displayName[0].toUpperCase()
+                        : '?',
                     style: const TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.bold,
@@ -69,7 +71,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 ),
-                title: Text(_displayName, style: theme.textTheme.titleMedium),
+                title: Text(_displayName,
+                    style: theme.textTheme.titleMedium),
                 subtitle: _shortId.isNotEmpty
                     ? Text('ID: $_shortId',
                         style: TextStyle(
@@ -82,10 +85,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          // ── Accessibility Role ──
+          // ── Language ──
           _SectionCard(
-            title: 'Accessibility Role',
-            icon: Icons.accessibility_new,
+            title: a11y.t('settings.language'),
+            icon: Icons.translate,
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -94,36 +97,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Select your communication role to personalise the experience.',
+                      a11y.t('settings.language_desc'),
                       style: theme.textTheme.bodySmall,
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    SegmentedButton<UserRole>(
+                    SegmentedButton<String>(
                       segments: const [
                         ButtonSegment(
-                          value: UserRole.deaf,
-                          label: Text('Deaf'),
-                          icon: Icon(Icons.sign_language),
+                          value: 'en',
+                          label: Text('English'),
+                          icon: Icon(Icons.language),
                         ),
                         ButtonSegment(
-                          value: UserRole.hearing,
-                          label: Text('Hearing'),
-                          icon: Icon(Icons.hearing),
-                        ),
-                        ButtonSegment(
-                          value: UserRole.both,
-                          label: Text('Both'),
-                          icon: Icon(Icons.accessibility_new),
+                          value: 'sw',
+                          label: Text('Kiswahili'),
+                          icon: Icon(Icons.translate),
                         ),
                       ],
-                      selected: {a11yCtrl.role},
-                      onSelectionChanged: (selected) {
-                        a11yCtrl.setRole(selected.first);
-                      },
+                      selected: {a11y.languageCode},
+                      onSelectionChanged: (s) =>
+                          a11y.setLanguageCode(s.first),
                       style: ButtonStyle(
                         shape: WidgetStatePropertyAll(
                           RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppRadius.md),
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.md),
                           ),
                         ),
                       ),
@@ -135,32 +133,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          // ── Theme ──
+          // ── Accessibility Role ──
           _SectionCard(
-            title: 'Appearance',
+            title: a11y.t('settings.role'),
+            icon: Icons.accessibility_new,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      a11y.t('settings.role_desc'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    SegmentedButton<UserRole>(
+                      segments: [
+                        ButtonSegment(
+                          value: UserRole.deaf,
+                          label: Text(a11y.t('settings.deaf')),
+                          icon: const Icon(Icons.sign_language),
+                        ),
+                        ButtonSegment(
+                          value: UserRole.hearing,
+                          label: Text(a11y.t('settings.hearing')),
+                          icon: const Icon(Icons.hearing),
+                        ),
+                        ButtonSegment(
+                          value: UserRole.both,
+                          label: Text(a11y.t('settings.both')),
+                          icon: const Icon(Icons.accessibility_new),
+                        ),
+                      ],
+                      selected: {a11y.role},
+                      onSelectionChanged: (s) => a11y.setRole(s.first),
+                      style: ButtonStyle(
+                        shape: WidgetStatePropertyAll(
+                          RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.md),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          // ── Appearance ──
+          _SectionCard(
+            title: a11y.t('settings.appearance'),
             icon: Icons.palette_outlined,
             children: [
               ListTile(
                 leading: Icon(themeCtrl.icon),
-                title: const Text('Theme'),
+                title: Text(a11y.t('settings.theme')),
                 subtitle: Text(themeCtrl.label),
                 trailing: SegmentedButton<ThemeMode>(
                   segments: const [
                     ButtonSegment(
-                      value: ThemeMode.light,
-                      icon: Icon(Icons.light_mode, size: 18),
-                    ),
+                        value: ThemeMode.light,
+                        icon: Icon(Icons.light_mode, size: 18)),
                     ButtonSegment(
-                      value: ThemeMode.system,
-                      icon: Icon(Icons.brightness_auto, size: 18),
-                    ),
+                        value: ThemeMode.system,
+                        icon: Icon(Icons.brightness_auto, size: 18)),
                     ButtonSegment(
-                      value: ThemeMode.dark,
-                      icon: Icon(Icons.dark_mode, size: 18),
-                    ),
+                        value: ThemeMode.dark,
+                        icon: Icon(Icons.dark_mode, size: 18)),
                   ],
                   selected: {themeCtrl.themeMode},
-                  onSelectionChanged: (s) => themeCtrl.setThemeMode(s.first),
+                  onSelectionChanged: (s) =>
+                      themeCtrl.setThemeMode(s.first),
                   showSelectedIcon: false,
                   style: ButtonStyle(
                     visualDensity: VisualDensity.compact,
@@ -177,31 +225,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          // ── Caption Settings ──
+          // ── Captions ──
           _SectionCard(
-            title: 'Captions & Subtitles',
+            title: a11y.t('settings.captions'),
             icon: Icons.subtitles_outlined,
             children: [
               SwitchListTile(
-                title: const Text('Enable Captions'),
-                subtitle: const Text('Show real-time subtitles during calls'),
-                value: a11yCtrl.captionsEnabled,
-                onChanged: a11yCtrl.setCaptionsEnabled,
-                activeColor: AppColors.primary,
+                title: Text(a11y.t('settings.enable_captions')),
+                subtitle: Text(a11y.t('settings.captions_desc')),
+                value: a11y.captionsEnabled,
+                onChanged: a11y.setCaptionsEnabled,
+                activeTrackColor: AppColors.primary,
               ),
               ListTile(
-                title: const Text('Caption Font Size'),
+                title: Text(a11y.t('settings.caption_size')),
                 subtitle: Slider(
-                  value: a11yCtrl.captionFontSize,
+                  value: a11y.captionFontSize,
                   min: 12,
                   max: 28,
                   divisions: 8,
-                  label: '${a11yCtrl.captionFontSize.round()}',
-                  onChanged: a11yCtrl.setCaptionFontSize,
+                  label: '${a11y.captionFontSize.round()}',
+                  onChanged: a11y.setCaptionFontSize,
                   activeColor: AppColors.primary,
                 ),
                 trailing: Text(
-                  '${a11yCtrl.captionFontSize.round()}',
+                  '${a11y.captionFontSize.round()}',
                   style: theme.textTheme.titleMedium,
                 ),
               ),
@@ -211,15 +259,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Notifications ──
           _SectionCard(
-            title: 'Notifications',
+            title: a11y.t('settings.notifications'),
             icon: Icons.notifications_outlined,
             children: [
               SwitchListTile(
-                title: const Text('Visual Notifications'),
-                subtitle: const Text('Use vibration and flash instead of audio alerts'),
-                value: a11yCtrl.visualNotifications,
-                onChanged: a11yCtrl.setVisualNotifications,
-                activeColor: AppColors.primary,
+                title: Text(a11y.t('settings.visual_notif')),
+                subtitle: Text(a11y.t('settings.visual_notif_desc')),
+                value: a11y.visualNotifications,
+                onChanged: a11y.setVisualNotifications,
+                activeTrackColor: AppColors.primary,
               ),
             ],
           ),
@@ -227,18 +275,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── About ──
           _SectionCard(
-            title: 'About',
+            title: a11y.t('settings.about'),
             icon: Icons.info_outline,
             children: [
               const ListTile(
                 title: Text('SignBridge'),
-                subtitle: Text('AI-Based Two-Way Sign Language Recognition\n& Speech Translation'),
+                subtitle: Text(
+                    'AI-Based Two-Way Sign Language Recognition\n& Speech Translation'),
               ),
               ListTile(
-                title: const Text('Version'),
+                title: Text(a11y.t('settings.version')),
                 subtitle: const Text('1.0.0'),
                 trailing: Icon(Icons.verified,
                     color: AppColors.primary.withValues(alpha: 0.6)),
+              ),
+              ListTile(
+                title: Text(a11y.t('settings.developer')),
+                subtitle: Text(a11y.t('settings.developer_name')),
+              ),
+              ListTile(
+                leading: const Icon(Icons.email_outlined, color: AppColors.primary, size: 20),
+                title: Text(a11y.t('settings.contact_support')),
+                subtitle: const Text('futurekelly360@gmail.com'),
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () async {
+                  final Uri emailUri = Uri(
+                    scheme: 'mailto',
+                    path: 'futurekelly360@gmail.com',
+                    queryParameters: {
+                      'subject': 'SignBridge Support & Feedback',
+                    },
+                  );
+                  if (await canLaunchUrl(emailUri)) {
+                    await launchUrl(emailUri);
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(a11y.t('common.error'))),
+                      );
+                    }
+                  }
+                },
               ),
             ],
           ),
@@ -249,7 +326,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// ── Neumorphic-style section card ──
+// ── Neumorphic section card ──
 class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -270,7 +347,6 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section header
           Padding(
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xs),

@@ -65,13 +65,12 @@ Following physical device testing on real smartphones and emulator setups, we id
 
 ---
 
-## 🚀 4. Future Roadmap (What Remains to be Done)
+## 🚀 4. Deferred Next Steps: Real AI Model Integration (Future Phase)
 
-The following high-priority features are required to complete the production readiness of SignBridge. Any future AI assistant working on this project should refer to this list.
+*To avoid confusion, the actual population of the final trained AI model (`.tflite`) and matching GIF assets has been deferred to a future phase. The system architecture, isolators, and fallback plumbing are 100% complete and fully verified.*
 
-### 🧠 1. Final AI Asset Creation & Integration (Deferred Phase)
-*Since the underlying TFLite plumbing is finished, the actual population of the AI assets is scheduled for the future when the dataset or model is ready.*
-- **Task:** Obtain or train an ASL/Swahili gesture model (`.tflite`) and gather corresponding GIFs.
+### 🧠 1. Final ASL/Swahili Gesture Model Integration (Future Step)
+- **Task:** Train or download a real gesture recognition model and place it in the app.
 - **Where to obtain Open-Source Models (No training required):**
   - **Hugging Face:** Search `huggingface.co/models` for `tflite sign language` or `ASL classification`.
   - **Kaggle:** Go to `kaggle.com/datasets` and search for "ASL Alphabet TFLite". Many users upload pre-trained models.
@@ -81,7 +80,7 @@ The following high-priority features are required to complete the production rea
   - **Advanced:** Use **Google Colab** + Python to fine-tune a `MobileNetV2` image classifier on a custom dataset.
 - **Integration:** Once obtained, simply overwrite `assets/models/gesture_model.tflite`, update `assets/labels/gesture_labels.txt`, and add matching GIFs to `assets/gifs/`. No Dart code changes are needed!
 
-### 🎬 2. GIF Asset Population
+### 🎬 2. GIF Asset Population (Future Step)
 - **Task:** Provide real sign language `.gif` files to correspond with the translated text.
 - **Implementation:** Populate the `assets/gifs/` directory with files like `hello.gif`, `thank_you.gif`, `yes.gif`, `no.gif`. The `GestureMapperService` will handle routing text to these files.
 

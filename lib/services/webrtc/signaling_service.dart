@@ -62,10 +62,27 @@ class SignalingService {
   /// Returns the generated callId (share this with the peer).
   Future<String> createCall() async {
     _answerApplied = false;
+    _callId = selfId;
 
-    // 1) Create a fresh call document.
-    final docRef = FirestoreService.callsRef.doc();
-    _callId = docRef.id;
+    final docRef = FirestoreService.callsRef.doc(selfId);
+
+    // 1) Clean up old ICE candidates from previous sessions to prevent pollution.
+    try {
+      final callerCandRef = FirestoreService.callerCandidates(selfId);
+      final calleeCandRef = FirestoreService.calleeCandidates(selfId);
+      final callerCandSnap = await callerCandRef.get();
+      for (var doc in callerCandSnap.docs) {
+        await doc.reference.delete();
+      }
+      final calleeCandSnap = await calleeCandRef.get();
+      for (var doc in calleeCandSnap.docs) {
+        await doc.reference.delete();
+      }
+    } catch (e) {
+      debugPrint('Failed to clean up old candidates: $e');
+    }
+
+    // 2) Set/Reset the call document.
     await docRef.set({
       'callerId': selfId,
       'calleeId': null,
@@ -73,7 +90,7 @@ class SignalingService {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // 2) Wire WebRTC callbacks → Firestore writes.
+    // 3) Wire WebRTC callbacks → Firestore writes.
     webrtc.onLocalSdpReady = (RTCSessionDescription sdp) async {
       await docRef.update({
         'offer': {'sdp': sdp.sdp, 'type': sdp.type},
@@ -83,10 +100,10 @@ class SignalingService {
       await FirestoreService.callerCandidates(_callId!).add(_candToMap(c));
     };
 
-    // 3) Generate offer (this triggers onLocalSdpReady above).
+    // 4) Generate offer (this triggers onLocalSdpReady above).
     await webrtc.createOffer();
 
-    // 4) Listen for answer + remote ICE.
+    // 5) Listen for answer + remote ICE.
     _listenForAnswer(docRef);
     _listenRemoteCandidates(FirestoreService.calleeCandidates(_callId!));
 

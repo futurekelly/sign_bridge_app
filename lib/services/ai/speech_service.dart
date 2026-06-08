@@ -57,8 +57,10 @@ class SpeechService {
 
     await _stt.listen(
       localeId: _locale,
-      listenMode: stt.ListenMode.dictation,
-      partialResults: true,
+      listenOptions: stt.SpeechListenOptions(
+        listenMode: stt.ListenMode.dictation,
+        partialResults: true,
+      ),
       onResult: (result) {
         // Only emit final results to avoid spamming UI/DataChannel.
         if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {

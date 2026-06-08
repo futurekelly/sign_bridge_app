@@ -36,4 +36,5 @@ A highly accessible, AI-powered Flutter application designed to bridge communica
 
 **TechStack Devs:**
 1. Kelvin E. Mbise
-2. Evance E. Manyanga
+📞+255 616 802 135
+📧[futurekelly360@gmail.com](mailto:futurekelly360@gmail.com)

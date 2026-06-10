@@ -12,6 +12,8 @@ import '../ui/screens/learning_screen.dart';
 import '../ui/screens/contacts_screen.dart';
 
 class AppRoutes {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   static const String onboarding = '/onboarding';
   static const String login = '/login';
   static const String home = '/home';

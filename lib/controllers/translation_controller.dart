@@ -62,10 +62,10 @@ class TranslationController extends ChangeNotifier {
   final List<TranslationMessage> _historyCache = [];
   final List<StreamSubscription> _subs = [];
 
-  AiStatus _currentStatus = AiStatus.idle;
-  AiStatus get currentStatus => _currentStatus;
-
   bool _started = false;
+  String _languageCode = 'en';
+  AiStatus _currentStatus = AiStatus.idle;
+  String get languageTag => _languageCode;
 
   // ─────────────────────────────────────────────
   // CONSTRUCTION
@@ -88,11 +88,10 @@ class TranslationController extends ChangeNotifier {
   // LIFECYCLE
   // ─────────────────────────────────────────────
 
-  /// Starts the AI pipeline. Idempotent.
-  /// [languageCode] controls STT/TTS locale: 'en' or 'sw'.
   Future<void> start({String languageCode = 'en'}) async {
     if (_started) return;
     _started = true;
+    _languageCode = languageCode;
 
     // Determine locale codes based on language selection.
     final ttsLang = languageCode == 'sw' ? 'sw-TZ' : 'en-US';
@@ -233,6 +232,26 @@ class TranslationController extends ChangeNotifier {
     _currentStatus = s;
     _statusCtrl.add(s);
     notifyListeners();
+  }
+
+  /// Simulates a local gesture result for testing (injection hook)
+  void simulateLocalGesture(String text) {
+    final msg = TranslationMessage(
+      text: text,
+      source: 'gesture',
+      language: languageTag,
+    );
+    _onGestureResult(msg);
+  }
+
+  /// Simulates a local speech result for testing (injection hook)
+  void simulateLocalSpeech(String text) {
+    final msg = TranslationMessage(
+      text: text,
+      source: 'speech',
+      language: languageTag,
+    );
+    _onSpeechResult(msg);
   }
 
   // ─────────────────────────────────────────────

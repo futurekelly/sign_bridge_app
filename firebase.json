@@ -1,1 +1,25 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"signbridge-3bfb3","appId":"1:407829922429:android:fc5961384d96ba18fd6714","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"signbridge-3bfb3","configurations":{"android":"1:407829922429:android:fc5961384d96ba18fd6714","web":"1:407829922429:web:bfb3b68aa2b0f0a6fd6714"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "signbridge-3bfb3",
+          "appId": "1:407829922429:android:fc5961384d96ba18fd6714",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "signbridge-3bfb3",
+          "configurations": {
+            "android": "1:407829922429:android:fc5961384d96ba18fd6714",
+            "web": "1:407829922429:web:bfb3b68aa2b0f0a6fd6714"
+          }
+        }
+      }
+    }
+  }
+}

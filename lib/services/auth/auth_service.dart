@@ -5,7 +5,6 @@
 // All authentication flows eventually call saveUserProfile() to ensure
 // the Firestore users collection has the correct shortId for call routing.
 
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -61,23 +60,100 @@ class AuthService {
   // ─────────────────────────────────────────────
   // 2. EMAIL & PASSWORD AUTH
   // ─────────────────────────────────────────────
-  Future<User?> registerWithEmail(String email, String password, String displayName) async {
+
+
+  Future<bool> isUsernameUnique(String username) async {
+    final clean = username.toLowerCase().trim();
+    if (clean.isEmpty) return false;
     try {
-      final UserCredential userCred = await _auth.createUserWithEmailAndPassword(
+      debugPrint('[AuthService] isUsernameUnique: Querying Firestore for /usernames/$clean');
+      final doc = await _db.collection('usernames').doc(clean).get();
+      final exists = doc.exists;
+      debugPrint('[AuthService] isUsernameUnique: /usernames/$clean exists = $exists');
+      return !exists;
+    } catch (e) {
+      debugPrint('[AuthService] isUsernameUnique: Failed with error: $e');
+      rethrow;
+    }
+  }
+
+  Future<User?> registerWithEmail(
+      String email, String password, String displayName, String signBridgeId) async {
+    final cleanUsername = signBridgeId.toLowerCase().trim();
+    if (cleanUsername.isEmpty) {
+      throw Exception('SignBridge ID cannot be empty');
+    }
+
+    // 1. Pre-check uniqueness to save operations and avoid orphan Auth accounts
+    debugPrint('[AuthService] registerWithEmail: STEP 1 - Pre-checking uniqueness of username: $cleanUsername');
+    final isUnique = await isUsernameUnique(cleanUsername);
+    if (!isUnique) {
+      debugPrint('[AuthService] registerWithEmail: STEP 1 FAILED - Username $cleanUsername is already taken');
+      throw Exception('SignBridge ID is already taken');
+    }
+    debugPrint('[AuthService] registerWithEmail: STEP 1 SUCCESS - Username $cleanUsername is unique');
+
+    UserCredential? userCred;
+    try {
+      // 2. Create Firebase Auth user
+      debugPrint('[AuthService] registerWithEmail: STEP 2 - Creating Firebase Auth user for email: $email');
+      userCred = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      
-      if (userCred.user != null) {
-        // Save to Firebase Auth profile
-        await userCred.user!.updateDisplayName(displayName);
-        await userCred.user!.reload();
-        // Save to Firestore profile
-        await saveUserProfile(displayName);
-      }
+
+      final User user = userCred.user!;
+      debugPrint('[AuthService] registerWithEmail: STEP 2 SUCCESS - User created. UID = ${user.uid}');
+
+      // Update display name in Auth
+      debugPrint('[AuthService] registerWithEmail: Updating Auth display name to: $displayName');
+      await user.updateDisplayName(displayName);
+      await user.reload();
+
+      // 3. Firestore Transaction for atomic unique validation & double write
+      debugPrint('[AuthService] registerWithEmail: STEP 3 - Running transaction for usernames/$cleanUsername and users/${user.uid}');
+      await _db.runTransaction((transaction) async {
+        final usernameRef = _db.collection('usernames').doc(cleanUsername);
+        final userDocRef = _db.collection('users').doc(user.uid);
+
+        debugPrint('[AuthService] Transaction: Reading usernames/$cleanUsername');
+        final usernameSnap = await transaction.get(usernameRef);
+        if (usernameSnap.exists) {
+          debugPrint('[AuthService] Transaction Check Failed: usernames/$cleanUsername already exists');
+          throw Exception('SignBridge ID is already taken');
+        }
+
+        // Set usernames index doc
+        debugPrint('[AuthService] Transaction: Setting usernames/$cleanUsername');
+        transaction.set(usernameRef, {'uid': user.uid});
+
+        // Set user profile doc
+        debugPrint('[AuthService] Transaction: Setting users/${user.uid}');
+        transaction.set(userDocRef, {
+          'displayName': displayName,
+          'signBridgeId': signBridgeId.trim(),
+          'uid': user.uid,
+          'status': 'idle',
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastLogin': FieldValue.serverTimestamp(),
+          'provider': 'email',
+        });
+      });
+      debugPrint('[AuthService] registerWithEmail: STEP 3 SUCCESS - Transaction completed successfully');
+
       return _auth.currentUser;
     } catch (e) {
-      debugPrint('[AuthService] Email Registration Error: $e');
+      debugPrint('[AuthService] registerWithEmail: STEP FAILED with error: $e');
+      // 4. Rollback Auth user if transaction database write fails
+      if (userCred?.user != null) {
+        try {
+          debugPrint('[AuthService] registerWithEmail: STEP 4 - Rollback. Deleting created Auth user: ${userCred!.user!.uid}');
+          await userCred.user!.delete();
+          debugPrint('[AuthService] registerWithEmail: STEP 4 SUCCESS - Auth user rolled back');
+        } catch (delErr) {
+          debugPrint('[AuthService] registerWithEmail: STEP 4 FAILED - Rollback deletion failed: $delErr');
+        }
+      }
       rethrow;
     }
   }
@@ -104,8 +180,6 @@ class AuthService {
     }
     try {
       final cred = await _auth.signInAnonymously();
-      // We do not save a profile here immediately, the LoginScreen handles it
-      // so it can assign the 'Guest' name.
       return cred.user;
     } catch (e) {
       debugPrint('[AuthService] Anonymous Login Error: $e');
@@ -125,29 +199,29 @@ class AuthService {
   DocumentReference<Map<String, dynamic>> get _userDoc =>
       _db.collection('users').doc(currentUser!.uid);
 
-  /// Saves the user's display name and generates a short ID.
-  /// Uses SetOptions(merge: true) so it doesn't overwrite an existing shortId
-  /// if a returning user signs in again.
-  Future<void> saveUserProfile(String displayName) async {
+  /// Saves the user's display name and optional custom SignBridge ID.
+  Future<void> saveUserProfile(String displayName, {String? signBridgeId}) async {
     if (currentUser == null) return;
-    
+
     // Update Firebase Auth's displayName if missing
     if (currentUser?.displayName == null || currentUser!.displayName!.isEmpty) {
       await currentUser?.updateDisplayName(displayName);
       await currentUser?.reload();
     }
 
-    // Check if profile already exists to preserve shortId
     final existing = await getUserProfile();
-    final String shortId = existing?['shortId'] as String? ?? _generateShortId();
+    final String? activeId = existing?['signBridgeId'] as String? ?? signBridgeId;
 
     await _userDoc.set({
       'displayName': displayName,
-      'shortId': shortId,
+      'signBridgeId': activeId,
       'uid': currentUser!.uid,
+      'status': existing?['status'] ?? 'idle',
       'createdAt': existing?['createdAt'] ?? FieldValue.serverTimestamp(),
       'lastLogin': FieldValue.serverTimestamp(),
-      'provider': currentUser!.isAnonymous ? 'anonymous' : currentUser!.providerData.firstOrNull?.providerId ?? 'email',
+      'provider': currentUser!.isAnonymous
+          ? 'anonymous'
+          : currentUser!.providerData.firstOrNull?.providerId ?? 'email',
     }, SetOptions(merge: true));
   }
 
@@ -164,20 +238,14 @@ class AuthService {
     return profile?['displayName'] as String?;
   }
 
-  Future<String?> getShortId() async {
+  Future<String?> getSignBridgeId() async {
     final profile = await getUserProfile();
-    return profile?['shortId'] as String?;
+    return profile?['signBridgeId'] as String?;
   }
 
   Future<bool> hasProfile() async {
     if (currentUser == null) return false;
     final profile = await getUserProfile();
     return profile != null && profile['displayName'] != null;
-  }
-
-  String _generateShortId() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0/I/1
-    final rng = Random.secure();
-    return List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
   }
 }

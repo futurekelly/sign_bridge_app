@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Unique usernames index - write-once prevention
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if request.auth != null && !exists(/databases/$(database)/documents/usernames/$(username));
+    }
+    
+    // User profile - read by anyone authenticated, create/write by owner, status update by anyone auth'd
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && (
+        request.auth.uid == uid || 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+      );
+
+      // Call history sub-collection: read/delete by owner, creation by any authenticated user (peer)
+      match /call_history/{historyId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create: if request.auth != null;
+      }
+    }
+    
+    // WebRTC Calling signaling documents
+    match /calls/{callId} {
+      allow read, write: if request.auth != null;
+      
+      // ICE candidates sub-collections
+      match /callerCandidates/{candidateId} {
+        allow read, write: if request.auth != null;
+      }
+      match /calleeCandidates/{candidateId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+  }
+}

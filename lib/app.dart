@@ -37,6 +37,7 @@ class SignBridgeApp extends StatelessWidget {
           themeMode: themeCtrl.themeMode,
           initialRoute: initialRoute,
           routes: AppRoutes.routes,
+          navigatorKey: AppRoutes.navigatorKey,
         ),
       ),
     );

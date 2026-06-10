@@ -29,8 +29,13 @@ enum CallRole { caller, callee }
 /// Route arguments for CallScreen.
 class CallArgs {
   final CallRole role;
-  final String? callId; // required for callee
-  const CallArgs({required this.role, this.callId});
+  final String callId;
+  final String peerUid;
+  const CallArgs({
+    required this.role,
+    this.callId = '',
+    this.peerUid = '',
+  });
 }
 
 /// Helpers to (de)serialize for DataChannel JSON payloads.

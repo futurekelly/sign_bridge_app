@@ -12,6 +12,7 @@ import '../../core/routes.dart';
 import '../../data/models/contact.dart';
 import '../../data/repositories/contacts_repository.dart';
 import '../widgets/role_badge.dart';
+import '../../services/webrtc/call_manager.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -236,18 +237,51 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   );
                 },
               ),
-              // Start a call and invite them (shares your Call ID)
+              // Start a call directly (dials the contact)
               ListTile(
                 leading: const Icon(Icons.add_call, color: AppColors.primary),
                 title: Text(a11y.t('home.create_call')),
-                subtitle: const Text('Generate a new Call ID to share'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.pushNamed(
-                    context,
-                    AppRoutes.call,
-                    arguments: const CallArgs(role: CallRole.caller),
+                subtitle: Text('Call ${contact.name} directly'),
+                onTap: () async {
+                  Navigator.pop(ctx); // close bottom sheet
+                  
+                  // Show loading indicator
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (loadingCtx) => const Center(child: CircularProgressIndicator()),
                   );
+
+                  try {
+                    final calleeUid = await CallManager.instance.resolveSignBridgeId(contact.id);
+                    if (calleeUid == null) {
+                      if (mounted) {
+                        Navigator.pop(context); // close loading indicator
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Contact not found in database')),
+                        );
+                      }
+                      return;
+                    }
+
+                    final callId = await CallManager.instance.initiateCall(calleeUid);
+                    if (mounted) {
+                      Navigator.pop(context); // close loading indicator
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.call,
+                        arguments: CallArgs(role: CallRole.caller, callId: callId, peerUid: calleeUid),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      Navigator.pop(context); // close loading indicator
+                      final errMsg = e.toString().replaceAll('Exception: ', '').replaceAll('FirebaseException: ', '');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(errMsg)),
+                      );
+                    }
+                  }
                 },
               ),
               // Copy User ID

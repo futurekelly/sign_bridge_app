@@ -1,12 +1,11 @@
-// CallScreen — WebRTC video call with role-based overlays.
-// GIF panel, captions, AI status adapt based on user role.
-
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/call_controller.dart';
 import '../../controllers/accessibility_controller.dart';
+import '../../controllers/translation_controller.dart';
 import '../../core/enums.dart';
 
 import '../../core/theme.dart';
@@ -27,10 +26,12 @@ class CallScreen extends StatelessWidget {
       create: (_) {
         final c = CallController();
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (args == null || args.role == CallRole.caller) {
-            c.startAsCaller(languageCode: langCode);
-          } else {
-            c.startAsCallee(args.callId!, languageCode: langCode);
+          if (args != null) {
+            if (args.role == CallRole.caller) {
+              c.startAsCaller(args.callId, args.peerUid, languageCode: langCode);
+            } else {
+              c.startAsCallee(args.callId, args.peerUid, languageCode: langCode);
+            }
           }
         });
         return c;
@@ -54,6 +55,152 @@ class _CallViewState extends State<_CallView> {
     setState(() => _isEnding = true);
     await controller.endCall();
     if (mounted) Navigator.of(context).pop();
+  }
+
+  void _showSimulatorSheet(BuildContext context, TranslationController translation) {
+    final a11y = context.read<AccessibilityController>();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.3),
+      builder: (context) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.75),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: const Border(
+                top: BorderSide(color: Colors.white12, width: 1.5),
+                left: BorderSide(color: Colors.white10, width: 1.5),
+                right: BorderSide(color: Colors.white10, width: 1.5),
+              ),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white30,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  a11y.t('call.sim_title'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  a11y.t('call.sim_gesture'),
+                  style: const TextStyle(
+                    color: AppColors.primaryLight,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  a11y.t('call.sim_gesture_desc'),
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    'hello',
+                    'thank_you',
+                    'yes',
+                    'no',
+                    'help',
+                  ].map((word) {
+                    final label = word.replaceAll('_', ' ').toUpperCase();
+                    return ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: const BorderSide(color: AppColors.primaryLight, width: 1),
+                        ),
+                      ),
+                      onPressed: () {
+                        translation.simulateLocalGesture(word);
+                        Navigator.pop(context);
+                      },
+                      child: Text(label, style: const TextStyle(fontSize: 12)),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  a11y.t('call.sim_speech'),
+                  style: const TextStyle(
+                    color: AppColors.secondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  a11y.t('call.sim_speech_desc'),
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    'hello',
+                    'thank_you',
+                    'yes',
+                    'no',
+                    'help',
+                  ].map((word) {
+                    final label = word.replaceAll('_', ' ').toUpperCase();
+                    return ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.secondary.withValues(alpha: 0.2),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: const BorderSide(color: AppColors.secondary, width: 1),
+                        ),
+                      ),
+                      onPressed: () {
+                        translation.simulateLocalSpeech(word);
+                        Navigator.pop(context);
+                      },
+                      child: Text(label, style: const TextStyle(fontSize: 12)),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -119,8 +266,11 @@ class _CallViewState extends State<_CallView> {
                   ),
                   const Spacer(),
                   // AI Status indicator
-                  AiStatusIndicator(
-                    statusStream: controller.translation.statusStream,
+                  GestureDetector(
+                    onDoubleTap: () => _showSimulatorSheet(context, controller.translation),
+                    child: AiStatusIndicator(
+                      statusStream: controller.translation.statusStream,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   _StatusPill(state: controller.state),

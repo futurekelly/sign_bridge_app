@@ -14,6 +14,7 @@ import '../../core/spacing.dart';
 import '../../data/models/recent_call.dart';
 import '../../data/repositories/recent_calls_repository.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/webrtc/call_manager.dart';
 import '../widgets/role_badge.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -35,13 +36,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    CallManager.instance.startListening();
     _loadProfile();
     _loadRecentCalls();
   }
 
   Future<void> _loadProfile() async {
     final name = await _auth.getDisplayName();
-    final shortId = await _auth.getShortId();
+    final shortId = await _auth.getSignBridgeId();
     if (mounted) {
       setState(() {
         _displayName = name ?? 'User';
@@ -143,8 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: a11y.t('home.create_call'),
               subtitle: a11y.t('home.create_call_sub'),
               color: AppColors.primary,
-              onTap: () => Navigator.pushNamed(context, AppRoutes.call,
-                  arguments: const CallArgs(role: CallRole.caller)),
+              onTap: () => _dialUser(context, a11y),
             ),
             const SizedBox(height: AppSpacing.md),
 
@@ -249,6 +250,74 @@ class _HomeScreenState extends State<HomeScreen> {
     if (id != null && id.isNotEmpty && context.mounted) {
       Navigator.pushNamed(context, AppRoutes.call,
           arguments: CallArgs(role: CallRole.callee, callId: id));
+    }
+  }
+
+  Future<void> _dialUser(BuildContext context, AccessibilityController a11y) async {
+    final controller = TextEditingController();
+    final id = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Call User'),
+        content: SingleChildScrollView(
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'SignBridge ID',
+              hintText: 'Enter peer\'s SignBridge ID',
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(a11y.t('home.cancel'))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Call'),
+          ),
+        ],
+      ),
+    );
+
+    if (id == null || id.isEmpty) return;
+
+    if (!mounted) return;
+    // Show a loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final calleeUid = await CallManager.instance.resolveSignBridgeId(id);
+      if (calleeUid == null) {
+        if (mounted) {
+          Navigator.pop(context); // close loading indicator
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('User not found')),
+          );
+        }
+        return;
+      }
+
+      final callId = await CallManager.instance.initiateCall(calleeUid);
+      if (mounted) {
+        Navigator.pop(context); // close loading indicator
+        Navigator.pushNamed(
+          context,
+          AppRoutes.call,
+          arguments: CallArgs(role: CallRole.caller, callId: callId, peerUid: calleeUid),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // close loading indicator
+        final errMsg = e.toString().replaceAll('Exception: ', '').replaceAll('FirebaseException: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errMsg)),
+        );
+      }
     }
   }
 }

@@ -31,7 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadProfile() async {
     final name = await _auth.getDisplayName();
-    final id = await _auth.getShortId();
+    final id = await _auth.getSignBridgeId();
     if (mounted) {
       setState(() {
         _displayName = name ?? 'User';

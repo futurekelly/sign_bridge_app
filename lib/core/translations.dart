@@ -52,6 +52,8 @@ class AppTranslations {
       'login.fill_fields': 'Please fill all required fields',
       'login.name_required': 'Name is required for Sign Up',
       'login.select_role': 'Select your role',
+      'login.signbridge_id': 'SignBridge ID (Username)',
+      'login.id_invalid': 'SignBridge ID must be 3-15 alphanumeric chars or underscores',
 
       // Home
       'home.welcome': 'Welcome',
@@ -110,6 +112,11 @@ class AppTranslations {
       'call.copied': 'Call ID copied!',
       'call.end': 'End Call',
       'call.error': 'Call Error',
+      'call.sim_title': 'AI Simulator (Test Helper)',
+      'call.sim_gesture': 'Simulate Gesture',
+      'call.sim_gesture_desc': 'Spoken via TTS and synced to both devices',
+      'call.sim_speech': 'Simulate Speech',
+      'call.sim_speech_desc': 'Synced as captions & GIF without speaking aloud',
 
       // History Screen
       'history.title': 'Translation History',
@@ -196,6 +203,8 @@ class AppTranslations {
       'login.fill_fields': 'Tafadhali jaza sehemu zote zinazohitajika',
       'login.name_required': 'Jina linahitajika kwa Usajili',
       'login.select_role': 'Chagua jukumu lako',
+      'login.signbridge_id': 'Kitambulisho cha SignBridge',
+      'login.id_invalid': 'Kitambulisho kiwe na herufi/namba 3-15 au mistari ya chini pekee',
 
       // Home
       'home.welcome': 'Karibu',
@@ -254,6 +263,11 @@ class AppTranslations {
       'call.copied': 'Kitambulisho cha Simu kimenakiliwa!',
       'call.end': 'Maliza Simu',
       'call.error': 'Hitilafu ya Simu',
+      'call.sim_title': 'Kigaia cha AI (Msaidizi)',
+      'call.sim_gesture': 'Iga Ishara',
+      'call.sim_gesture_desc': 'Inanongonwa na TTS na kusawazishwa kwa vifaa vyote',
+      'call.sim_speech': 'Iga Usemi',
+      'call.sim_speech_desc': 'Inasawazishwa kama manukuu na GIF bila sauti',
 
       // History Screen
       'history.title': 'Historia ya Tafsiri',

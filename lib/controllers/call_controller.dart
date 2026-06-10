@@ -15,7 +15,10 @@
 // • DataChannel callbacks are wired in _bootstrap() (early), so
 //   incoming peer messages are never missed once the DataChannel opens.
 
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../services/auth/auth_service.dart';
 import '../services/webrtc/webrtc_service.dart';
 import '../services/webrtc/signaling_service.dart';
@@ -23,6 +26,7 @@ import '../core/utils/permissions.dart';
 import '../data/models/recent_call.dart';
 import '../data/repositories/recent_calls_repository.dart';
 import 'translation_controller.dart';
+import '../services/webrtc/call_manager.dart';
 
 enum CallState { idle, connecting, inCall, ended, error }
 
@@ -51,6 +55,9 @@ class CallController extends ChangeNotifier {
   bool _remoteConnected = false;
   bool get remoteConnected => _remoteConnected;
 
+  String? _peerUid;
+  String? get peerUid => _peerUid;
+
   bool _disposed = false;
 
   /// Language code for AI services ('en' or 'sw').
@@ -63,32 +70,79 @@ class CallController extends ChangeNotifier {
   /// even if onRemoteStreamAdded fires multiple times.
   bool _translationStarted = false;
 
+  /// Whether the current user initiated the call.
+  bool _isCaller = false;
+  bool get isCaller => _isCaller;
+
   // ─────────────────────────────────────────────
   // ENTRY POINTS
   // ─────────────────────────────────────────────
 
-  Future<String?> startAsCaller({String languageCode = 'en'}) async {
+  Future<bool> startAsCaller(String callId, String calleeUid, {String languageCode = 'en'}) async {
+    _isCaller = true;
     _languageCode = languageCode;
-    final ok = await _bootstrap();
-    if (!ok) return null;
-    try {
-      _signaling = SignalingService(
-        webrtc: webrtc,
-        selfId: _auth.currentUser!.uid,
-      );
-      _callId = await _signaling!.createCall();
-      _callStartTime = DateTime.now();
-      _setState(CallState.inCall);
-      // Translation starts only when the peer connects (see _bootstrap).
-      return _callId;
-    } catch (e) {
-      _fail('Failed to create call: $e');
-      return null;
-    }
+    _peerUid = calleeUid;
+    _callId = callId;
+
+    _setState(CallState.connecting);
+
+    // Listen for Callee call status transition (accepted, rejected, timed_out)
+    final docRef = FirebaseFirestore.instance.collection('calls').doc(callId);
+    StreamSubscription? docSub;
+
+    docSub = docRef.snapshots().listen((snap) async {
+      if (!snap.exists) {
+        docSub?.cancel();
+        _fail('Call ended or was declined');
+        return;
+      }
+
+      final data = snap.data()!;
+      final status = data['status'];
+
+      if (status == 'accepted') {
+        docSub?.cancel();
+        final ok = await _bootstrap();
+        if (!ok) return;
+
+        try {
+          _signaling = SignalingService(
+            webrtc: webrtc,
+            selfId: _auth.currentUser!.uid,
+          );
+          await _signaling!.createCall(callId);
+          _callStartTime = DateTime.now();
+          _setState(CallState.inCall);
+        } catch (e) {
+          _fail('Failed to connect: $e');
+        }
+      } else if (status == 'rejected') {
+        docSub?.cancel();
+        _fail('Call was declined');
+      } else if (status == 'timed_out') {
+        docSub?.cancel();
+        _fail('No answer');
+      }
+    });
+
+    // Ringing Timeout (30 seconds)
+    Timer(const Duration(seconds: 30), () async {
+      if (state == CallState.connecting) {
+        docSub?.cancel();
+        try {
+          await CallManager.instance.timeoutCall(callId, calleeUid, _auth.currentUser!.uid);
+        } catch (_) {}
+        _fail('No answer');
+      }
+    });
+
+    return true;
   }
 
-  Future<bool> startAsCallee(String callId, {String languageCode = 'en'}) async {
+  Future<bool> startAsCallee(String callId, String callerUid, {String languageCode = 'en'}) async {
+    _isCaller = false;
     _languageCode = languageCode;
+    _peerUid = callerUid;
     final ok = await _bootstrap();
     if (!ok) return false;
     try {
@@ -100,7 +154,6 @@ class CallController extends ChangeNotifier {
       _callId = callId;
       _callStartTime = DateTime.now();
       _setState(CallState.inCall);
-      // Translation starts only when the peer connects (see _bootstrap).
       return true;
     } catch (e) {
       _fail('Failed to join call: $e');
@@ -120,9 +173,34 @@ class CallController extends ChangeNotifier {
         _fail('Camera & microphone permissions are required.');
         return false;
       }
-      await _auth.signInAnonymously();
+      if (_auth.currentUser == null) {
+        debugPrint('[CallController] No authenticated user. Signing in anonymously...');
+        await _auth.signInAnonymously();
+      } else {
+        debugPrint('[CallController] User already authenticated: UID = ${_auth.currentUser!.uid}');
+      }
       await webrtc.initialize();
       await webrtc.createPeerConnection_();
+
+      webrtc.onConnectionStateChanged = (RTCPeerConnectionState state) {
+        debugPrint('[CallController] WebRTC connection state: $state');
+        switch (state) {
+          case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
+            _setState(CallState.connecting);
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
+            _setState(CallState.inCall);
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+            _fail('WebRTC Connection disconnected');
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+            _fail('WebRTC Connection failed');
+            break;
+          default:
+            break;
+        }
+      };
 
       // Wire DataChannel callbacks early so no messages are missed
       // once the DataChannel opens (which can happen before remote
@@ -184,8 +262,27 @@ class CallController extends ChangeNotifier {
     // 2) Stop AI pipeline.
     try { await translation.stop(); } catch (_) {}
 
-    // 3) End signaling.
-    try { await _signaling?.endCall(); } catch (_) {}
+    // 3) End signaling via CallManager to handle status updates & Purge
+    if (_callId != null && _peerUid != null) {
+      final myUid = _auth.currentUser!.uid;
+      final caller = _isCaller ? myUid : _peerUid!;
+      final callee = _isCaller ? _peerUid! : myUid;
+      if (_isCaller && _state == CallState.connecting) {
+        try {
+          await CallManager.instance.cancelCall(_callId!, caller, callee);
+        } catch (_) {}
+      } else {
+        int duration = 0;
+        if (_callStartTime != null) {
+          duration = DateTime.now().difference(_callStartTime!).inSeconds;
+        }
+        try {
+          await CallManager.instance.endCall(_callId!, callee, caller, durationSeconds: duration);
+        } catch (_) {}
+      }
+    }
+
+    try { await _signaling?.dispose(); } catch (_) {}
 
     // 4) Dispose WebRTC resources last.
     try { await webrtc.dispose(); } catch (_) {}
@@ -215,9 +312,40 @@ class CallController extends ChangeNotifier {
   // INTERNAL
   // ─────────────────────────────────────────────
 
-  void _fail(String msg) {
+  Future<void> _fail(String msg) async {
     _errorMessage = msg;
     _setState(CallState.error);
+
+    // Perform cleanup without setting state to ended
+    if (_disposed) return;
+    _disposed = true;
+
+    await _saveRecentCall();
+    
+    try { await translation.stop(); } catch (_) {}
+
+    if (_callId != null && _peerUid != null) {
+      final myUid = _auth.currentUser!.uid;
+      final caller = _isCaller ? myUid : _peerUid!;
+      final callee = _isCaller ? _peerUid! : myUid;
+      
+      if (_isCaller && _state == CallState.connecting) {
+        try {
+          await CallManager.instance.cancelCall(_callId!, caller, callee);
+        } catch (_) {}
+      } else {
+        int duration = 0;
+        if (_callStartTime != null) {
+          duration = DateTime.now().difference(_callStartTime!).inSeconds;
+        }
+        try {
+          await CallManager.instance.endCall(_callId!, callee, caller, durationSeconds: duration);
+        } catch (_) {}
+      }
+    }
+
+    try { await _signaling?.dispose(); } catch (_) {}
+    try { await webrtc.dispose(); } catch (_) {}
   }
 
   void _setState(CallState next) {

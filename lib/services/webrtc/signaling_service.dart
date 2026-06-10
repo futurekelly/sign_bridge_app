@@ -58,39 +58,14 @@ class SignalingService {
   // PUBLIC API
   // ─────────────────────────────────────────────
 
-  /// CALLER side: creates a new call document and emits an SDP offer.
-  /// Returns the generated callId (share this with the peer).
-  Future<String> createCall() async {
+  /// CALLER side: Configures signaling for a pre-created callId and emits an SDP offer.
+  Future<void> createCall(String callId) async {
     _answerApplied = false;
-    _callId = selfId;
+    _callId = callId;
 
-    final docRef = FirestoreService.callsRef.doc(selfId);
+    final docRef = FirestoreService.callsRef.doc(callId);
 
-    // 1) Clean up old ICE candidates from previous sessions to prevent pollution.
-    try {
-      final callerCandRef = FirestoreService.callerCandidates(selfId);
-      final calleeCandRef = FirestoreService.calleeCandidates(selfId);
-      final callerCandSnap = await callerCandRef.get();
-      for (var doc in callerCandSnap.docs) {
-        await doc.reference.delete();
-      }
-      final calleeCandSnap = await calleeCandRef.get();
-      for (var doc in calleeCandSnap.docs) {
-        await doc.reference.delete();
-      }
-    } catch (e) {
-      debugPrint('Failed to clean up old candidates: $e');
-    }
-
-    // 2) Set/Reset the call document.
-    await docRef.set({
-      'callerId': selfId,
-      'calleeId': null,
-      'status': 'waiting',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    // 3) Wire WebRTC callbacks → Firestore writes.
+    // 1) Wire WebRTC callbacks → Firestore updates.
     webrtc.onLocalSdpReady = (RTCSessionDescription sdp) async {
       await docRef.update({
         'offer': {'sdp': sdp.sdp, 'type': sdp.type},
@@ -100,14 +75,12 @@ class SignalingService {
       await FirestoreService.callerCandidates(_callId!).add(_candToMap(c));
     };
 
-    // 4) Generate offer (this triggers onLocalSdpReady above).
+    // 2) Generate offer (this triggers onLocalSdpReady above).
     await webrtc.createOffer();
 
-    // 5) Listen for answer + remote ICE.
+    // 3) Listen for answer + remote ICE.
     _listenForAnswer(docRef);
     _listenRemoteCandidates(FirestoreService.calleeCandidates(_callId!));
-
-    return _callId!;
   }
 
   /// CALLEE side: joins an existing call by ID.
@@ -121,10 +94,9 @@ class SignalingService {
       throw Exception('Call $callId not found');
     }
 
-    // 1) Mark as joined.
+    // 1) Mark as accepted.
     await docRef.update({
-      'calleeId': selfId,
-      'status': 'active',
+      'status': 'accepted',
     });
 
     // 2) Wire callbacks for our own SDP/ICE.
@@ -137,19 +109,45 @@ class SignalingService {
       await FirestoreService.calleeCandidates(callId).add(_candToMap(c));
     };
 
-    // 3) Read the offer that the caller already wrote.
+    // 3) Read the offer. If it doesn't exist yet, listen for it real-time.
     final data = snap.data();
     final offerMap = data?['offer'];
-    if (offerMap == null) {
-      throw Exception('Call has no offer yet — caller may not be ready');
+    if (offerMap != null) {
+      final offer = RTCSessionDescription(offerMap['sdp'], offerMap['type']);
+      // 4) Apply the offer and create our answer (this triggers onLocalSdpReady).
+      await webrtc.handleRemoteOffer(offer);
+      // 5) Listen for caller ICE candidates.
+      _listenRemoteCandidates(FirestoreService.callerCandidates(callId));
+    } else {
+      debugPrint('[Signaling] Call has no offer yet. Waiting for caller to write offer...');
+      final completer = Completer<void>();
+      StreamSubscription? tempSub;
+
+      tempSub = docRef.snapshots().listen((docSnap) async {
+        final d = docSnap.data();
+        if (d != null && d['offer'] != null) {
+          tempSub?.cancel();
+          final oMap = d['offer'];
+          final offer = RTCSessionDescription(oMap['sdp'], oMap['type']);
+          try {
+            await webrtc.handleRemoteOffer(offer);
+            _listenRemoteCandidates(FirestoreService.callerCandidates(callId));
+            completer.complete();
+          } catch (e) {
+            completer.completeError(e);
+          }
+        }
+      });
+
+      // Wait up to 10 seconds for caller to initialize camera/offer
+      await completer.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          tempSub?.cancel();
+          throw TimeoutException('Timed out waiting for caller to initialize connection');
+        },
+      );
     }
-    final offer = RTCSessionDescription(offerMap['sdp'], offerMap['type']);
-
-    // 4) Apply the offer and create our answer (this triggers onLocalSdpReady).
-    await webrtc.handleRemoteOffer(offer);
-
-    // 5) Listen for caller ICE candidates.
-    _listenRemoteCandidates(FirestoreService.callerCandidates(callId));
   }
 
   /// Ends the call: marks status and stops listeners.

@@ -11,6 +11,7 @@ import '../../core/theme.dart';
 import '../../core/spacing.dart';
 import '../../core/routes.dart';
 import '../../services/auth/auth_service.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 enum AuthMode { login, signup }
 
@@ -27,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController(); // Only for Sign Up
+  final _usernameController = TextEditingController(); // Only for Sign Up
   
   AuthMode _authMode = AuthMode.login;
   bool _busy = false;
@@ -70,6 +72,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -90,18 +93,31 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         await _auth.loginWithEmail(email, password);
       } else {
         final name = _nameController.text.trim();
+        final username = _usernameController.text.trim().toLowerCase();
         if (name.isEmpty) {
           setState(() { _error = a11y.t('login.name_required'); _busy = false; });
           return;
         }
-        await _auth.registerWithEmail(email, password, name);
+        if (username.isEmpty ||
+            username.length < 3 ||
+            username.length > 15 ||
+            !RegExp(r'^[a-z0-9_]+$').hasMatch(username)) {
+          setState(() { _error = a11y.t('login.id_invalid'); _busy = false; });
+          return;
+        }
+        await _auth.registerWithEmail(email, password, name, username);
         if (mounted) context.read<AccessibilityController>().setRole(_selectedRole);
       }
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, AppRoutes.home);
     } catch (e) {
-      setState(() => _error = _cleanFirebaseError(e.toString()));
+      debugPrint('[LoginScreen] registerWithEmail / loginWithEmail failed: $e');
+      String msg = e.toString();
+      if (e is FirebaseException) {
+        msg = '${e.code}: ${e.message}';
+      }
+      setState(() => _error = _cleanFirebaseError(msg));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -298,6 +314,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 // Neumorphic Inputs
                                 if (_authMode == AuthMode.signup) ...[
                                   _buildNeumorphicInput(context, _nameController, a11y.t('login.name'), Icons.person_outline),
+                                  const SizedBox(height: AppSpacing.md),
+                                  _buildNeumorphicInput(context, _usernameController, a11y.t('login.signbridge_id'), Icons.alternate_email, keyboardType: TextInputType.text),
                                   const SizedBox(height: AppSpacing.md),
                                 ],
                                 _buildNeumorphicInput(context, _emailController, a11y.t('login.email'), Icons.email_outlined, keyboardType: TextInputType.emailAddress),

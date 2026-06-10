@@ -23,4 +23,16 @@ class FirestoreService {
 
   static CollectionReference<Map<String, dynamic>> calleeCandidates(String callId) =>
       callDoc(callId).collection('calleeCandidates');
+
+  static CollectionReference<Map<String, dynamic>> get usernamesRef =>
+      _db.collection('usernames');
+
+  static DocumentReference<Map<String, dynamic>> usernameDoc(String username) =>
+      usernamesRef.doc(username.toLowerCase().trim());
+
+  static CollectionReference<Map<String, dynamic>> get usersRef =>
+      _db.collection('users');
+
+  static DocumentReference<Map<String, dynamic>> userDoc(String uid) =>
+      usersRef.doc(uid);
 }

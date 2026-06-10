@@ -59,6 +59,7 @@ class WebRTCService {
   /// CallController uses this to set remoteConnected = true and
   /// trigger a UI rebuild so the Call ID banner hides and remote video shows.
   VoidCallback? onRemoteStreamAdded;
+  void Function(RTCPeerConnectionState)? onConnectionStateChanged;
 
   // ── ICE server configuration ──────────────────────────────────────────
   //
@@ -148,6 +149,7 @@ class WebRTCService {
     // ── Connection state monitoring ──
     _peerConnection!.onConnectionState = (RTCPeerConnectionState state) {
       debugPrint('[WebRTC] connection state → $state');
+      onConnectionStateChanged?.call(state);
     };
 
     // ── ICE connection state monitoring ──

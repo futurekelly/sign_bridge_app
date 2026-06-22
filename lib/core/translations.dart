@@ -161,6 +161,34 @@ class AppTranslations {
       'contacts.delete_confirm': 'Delete this contact?',
       'contacts.save': 'Save',
       'settings.contact_support': 'Contact Support',
+
+      // Profile Setup
+      'profile_setup.title': 'Complete Your Profile',
+      'profile_setup.subtitle': 'Just a few questions to get you started',
+      'profile_setup.how_to_call': 'How can we call you?',
+      'profile_setup.display_name_hint': 'Enter display name',
+      'profile_setup.role_question': 'What is your communication role?',
+      'profile_setup.role_desc': 'This adapts the call UI to your needs.',
+      'profile_setup.create_id': 'Choose a SignBridge ID',
+      'profile_setup.create_id_hint': 'Enter unique username',
+      'profile_setup.submit': 'Create Account',
+      'profile_setup.id_taken': 'SignBridge ID is already taken',
+      'profile_setup.id_invalid': 'SignBridge ID must be 3-15 characters (letters, numbers, or underscore)',
+      'profile_setup.logout': 'Cancel & Log Out',
+      'profile_setup.lang_title': 'Preferred Language',
+
+      // Forgot Password
+      'login.forgot_password': 'Forgot Password?',
+      'forgot_password.title': 'Reset Password',
+      'forgot_password.desc': 'Enter your email to receive a password reset link from Firebase.',
+      'forgot_password.send': 'Send Reset Link',
+      'forgot_password.sent': 'Password reset link sent! Check your inbox.',
+      'forgot_password.invalid_email': 'Please enter a valid email address.',
+
+      // Call Screen Overlay
+      'call.ended_by_peer': 'Call Ended',
+      'call.ended_by_peer_desc': 'The remote peer has disconnected.',
+      'call.go_home': 'Go Home',
     },
 
     // ────────────────────────── SWAHILI ──────────────────────────
@@ -242,7 +270,7 @@ class AppTranslations {
       'settings.enable_captions': 'Washa Manukuu',
       'settings.captions_desc':
           'Onyesha manukuu ya wakati halisi wakati wa simu',
-      'settings.caption_size': 'Ukubwa wa Fonti ya Manukuu',
+      'settings.caption_size': 'Ukubwa vya Fonti ya Manukuu',
       'settings.notifications': 'Arifa',
       'settings.visual_notif': 'Arifa za Kuona',
       'settings.visual_notif_desc':
@@ -312,6 +340,34 @@ class AppTranslations {
       'contacts.delete_confirm': 'Futa mawasiliano haya?',
       'contacts.save': 'Hifadhi',
       'settings.contact_support': 'Wasiliana na Huduma',
+
+      // Profile Setup
+      'profile_setup.title': 'Kamilisha Wasifu Wako',
+      'profile_setup.subtitle': 'Maswali machache tu ili uanze',
+      'profile_setup.how_to_call': 'Tukuite jina gani?',
+      'profile_setup.display_name_hint': 'Weka jina la kuonyesha',
+      'profile_setup.role_question': 'Jukumu lako la mawasiliano ni nini?',
+      'profile_setup.role_desc': 'Hii inabadilisha UI ya simu kulingana na mahitaji yako.',
+      'profile_setup.create_id': 'Chagua Kitambulisho cha SignBridge',
+      'profile_setup.create_id_hint': 'Weka jina la mtumiaji la kipekee',
+      'profile_setup.submit': 'Unda Akaunti',
+      'profile_setup.id_taken': 'Kitambulisho cha SignBridge kimeshachukuliwa',
+      'profile_setup.id_invalid': 'Kitambulisho lazima kiwe na herufi au namba 3-15',
+      'profile_setup.logout': 'Ghairi & Toka',
+      'profile_setup.lang_title': 'Lugha Upendayo',
+
+      // Forgot Password
+      'login.forgot_password': 'Umesahau Neno la Siri?',
+      'forgot_password.title': 'Rudisha Neno la Siri',
+      'forgot_password.desc': 'Weka barua pepe yako ili kupokea kiungo cha kuweka upya neno la siri kutoka Firebase.',
+      'forgot_password.send': 'Tuma Kiungo cha Upya',
+      'forgot_password.sent': 'Kiungo kimetumwa! Angalia kikasha chako cha barua pepe.',
+      'forgot_password.invalid_email': 'Tafadhali weka barua pepe halali.',
+
+      // Call Screen Overlay
+      'call.ended_by_peer': 'Simu Imeisha',
+      'call.ended_by_peer_desc': 'Mtumiaji mwenzako amekata simu.',
+      'call.go_home': 'Nyumbani',
     },
   };
 }

@@ -23,6 +23,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../core/enums.dart';
 import '../data/models/translation_message.dart';
@@ -31,6 +32,7 @@ import '../services/ai/gesture_recognition_service.dart';
 import '../services/ai/gesture_mapper_service.dart';
 import '../services/ai/speech_service.dart';
 import '../services/ai/tts_service.dart';
+import '../services/ai/inference_manager.dart';
 
 class TranslationController extends ChangeNotifier {
   // ── Injected services (kept private — UI must not access them) ──
@@ -57,6 +59,9 @@ class TranslationController extends ChangeNotifier {
 
   /// STATUS — system state. ai_status_overlay subscribes.
   Stream<AiStatus> get statusStream => _statusCtrl.stream;
+
+  /// Exposes InferenceManager for UI access to performance stats and hand landmarks
+  InferenceManager get inferenceManager => _gesture.inferenceManager;
 
   // ── Internal state ──
   final List<TranslationMessage> _historyCache = [];
@@ -88,7 +93,7 @@ class TranslationController extends ChangeNotifier {
   // LIFECYCLE
   // ─────────────────────────────────────────────
 
-  Future<void> start({String languageCode = 'en'}) async {
+  Future<void> start({String languageCode = 'en', MediaStreamTrack? localVideoTrack}) async {
     if (_started) return;
     _started = true;
     _languageCode = languageCode;
@@ -111,7 +116,7 @@ class TranslationController extends ChangeNotifier {
     // Initialize STT with the correct locale, then start both pipelines.
     await _speech.initialize(locale: sttLocale);
     await Future.wait([
-      _gesture.start(),
+      _gesture.start(localVideoTrack: localVideoTrack),
       _speech.start(),
     ]);
 

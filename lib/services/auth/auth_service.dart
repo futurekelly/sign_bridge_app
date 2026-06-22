@@ -246,6 +246,10 @@ class AuthService {
   Future<bool> hasProfile() async {
     if (currentUser == null) return false;
     final profile = await getUserProfile();
-    return profile != null && profile['displayName'] != null;
+    return profile != null &&
+        profile['displayName'] != null &&
+        profile['displayName'].toString().trim().isNotEmpty &&
+        profile['signBridgeId'] != null &&
+        profile['signBridgeId'].toString().trim().isNotEmpty;
   }
 }

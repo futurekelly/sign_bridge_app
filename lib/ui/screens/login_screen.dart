@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
+import 'dart:async';
 import '../../controllers/accessibility_controller.dart';
 import '../../core/constants.dart';
 import '../../core/enums.dart';
@@ -11,7 +12,7 @@ import '../../core/theme.dart';
 import '../../core/spacing.dart';
 import '../../core/routes.dart';
 import '../../services/auth/auth_service.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 enum AuthMode { login, signup }
 
@@ -60,8 +61,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Future<void> _checkExistingUser() async {
     if (_auth.currentUser != null) {
       final hasProfile = await _auth.hasProfile();
-      if (hasProfile && mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.home);
+      if (mounted) {
+        if (hasProfile) {
+          Navigator.pushReplacementNamed(context, AppRoutes.home);
+        } else {
+          Navigator.pushReplacementNamed(context, AppRoutes.profileSetup);
+        }
       }
     }
   }
@@ -110,7 +115,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
 
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, AppRoutes.home);
+      final hasProfile = await _auth.hasProfile();
+      if (mounted) {
+        if (hasProfile) {
+          Navigator.pushReplacementNamed(context, AppRoutes.home);
+        } else {
+          Navigator.pushReplacementNamed(context, AppRoutes.profileSetup);
+        }
+      }
     } catch (e) {
       debugPrint('[LoginScreen] registerWithEmail / loginWithEmail failed: $e');
       String msg = e.toString();
@@ -128,7 +140,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     try {
       final user = await _auth.signInWithGoogle();
       if (user != null && mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.home);
+        final hasProfile = await _auth.hasProfile();
+        if (mounted) {
+          if (hasProfile) {
+            Navigator.pushReplacementNamed(context, AppRoutes.home);
+          } else {
+            Navigator.pushReplacementNamed(context, AppRoutes.profileSetup);
+          }
+        }
       }
     } catch (e) {
       setState(() => _error = _cleanFirebaseError(e.toString()));
@@ -141,14 +160,140 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() { _busy = true; _error = null; });
     try {
       await _auth.signInAnonymously();
-      await _auth.saveUserProfile('Guest');
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, AppRoutes.home);
+      final hasProfile = await _auth.hasProfile();
+      if (mounted) {
+        if (hasProfile) {
+          Navigator.pushReplacementNamed(context, AppRoutes.home);
+        } else {
+          Navigator.pushReplacementNamed(context, AppRoutes.profileSetup);
+        }
+      }
     } catch (e) {
       setState(() => _error = 'Guest login failed.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _showForgotPasswordDialog() {
+    final a11y = context.read<AccessibilityController>();
+    final theme = Theme.of(context);
+    final emailCtrl = TextEditingController(text: _emailController.text);
+    bool resetting = false;
+    String? resetError;
+    String? resetSuccess;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: AlertDialog(
+                backgroundColor: theme.scaffoldBackgroundColor.withValues(alpha: 0.85),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
+                  side: BorderSide(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                title: Text(
+                  a11y.t('forgot_password.title'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      a11y.t('forgot_password.desc'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Container(
+                      decoration: AppTheme.neumorphic(context, radius: AppRadius.md),
+                      child: TextField(
+                        controller: emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        style: theme.textTheme.bodyMedium,
+                        decoration: InputDecoration(
+                          hintText: a11y.t('login.email'),
+                          prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        ),
+                      ),
+                    ),
+                    if (resetError != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        resetError!,
+                        style: const TextStyle(color: AppColors.error, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                    if (resetSuccess != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        resetSuccess!,
+                        style: const TextStyle(color: AppColors.success, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(a11y.t('home.cancel')),
+                  ),
+                  ElevatedButton(
+                    onPressed: resetting || resetSuccess != null
+                        ? null
+                        : () async {
+                            final email = emailCtrl.text.trim();
+                            if (email.isEmpty || !email.contains('@')) {
+                              setDialogState(() {
+                                resetError = a11y.t('forgot_password.invalid_email');
+                              });
+                              return;
+                            }
+                            setDialogState(() {
+                              resetting = true;
+                              resetError = null;
+                              resetSuccess = null;
+                            });
+                            try {
+                              await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                              setDialogState(() {
+                                resetSuccess = a11y.t('forgot_password.sent');
+                                resetting = false;
+                              });
+                            } catch (e) {
+                              setDialogState(() {
+                                resetError = _cleanFirebaseError(e.toString());
+                                resetting = false;
+                              });
+                            }
+                          },
+                    child: resetting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : Text(a11y.t('forgot_password.send')),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   String _cleanFirebaseError(String error) {
@@ -270,7 +415,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       width: 80, height: 80,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: LinearGradient(
+                        gradient: const LinearGradient(
                           colors: [AppColors.primary, AppColors.primaryLight],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
@@ -321,6 +466,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 _buildNeumorphicInput(context, _emailController, a11y.t('login.email'), Icons.email_outlined, keyboardType: TextInputType.emailAddress),
                                 const SizedBox(height: AppSpacing.md),
                                 _buildNeumorphicInput(context, _passwordController, a11y.t('login.password'), Icons.lock_outline, isPassword: true),
+                                if (_authMode == AuthMode.login) ...[
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: _showForgotPasswordDialog,
+                                      child: Text(
+                                        a11y.t('login.forgot_password'),
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.primaryLight,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 
                                 if (_authMode == AuthMode.signup) ...[
                                   const SizedBox(height: AppSpacing.lg),

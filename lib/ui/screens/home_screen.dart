@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _shortId = '';
   bool _loaded = false;
   List<RecentCall> _recentCalls = [];
-  int _currentNav = 0;
+  final int _currentNav = 0;
 
   @override
   void initState() {
@@ -150,16 +150,6 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: AppSpacing.md),
 
             _ActionCard(
-              icon: Icons.call_received,
-              title: a11y.t('home.join_call'),
-              subtitle: a11y.t('home.join_call_sub'),
-              color: AppColors.secondary,
-              onTap: () => _promptJoin(context, a11y),
-            ),
-
-            const SizedBox(height: AppSpacing.md),
-
-            _ActionCard(
               icon: Icons.people_outline,
               title: a11y.t('contacts.title'),
               subtitle: a11y.t('contacts.sub'),
@@ -222,37 +212,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _promptJoin(BuildContext context, AccessibilityController a11y) async {
-    final controller = TextEditingController();
-    final id = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(a11y.t('home.join_call')),
-        content: SingleChildScrollView(
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: a11y.t('home.call_id'),
-              hintText: a11y.t('home.call_id_hint'),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(a11y.t('home.cancel'))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text(a11y.t('home.join')),
-          ),
-        ],
-      ),
-    );
-    if (id != null && id.isNotEmpty && context.mounted) {
-      Navigator.pushNamed(context, AppRoutes.call,
-          arguments: CallArgs(role: CallRole.callee, callId: id));
-    }
-  }
-
   Future<void> _dialUser(BuildContext context, AccessibilityController a11y) async {
     final controller = TextEditingController();
     final id = await showDialog<String>(
@@ -281,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (id == null || id.isEmpty) return;
 
-    if (!mounted) return;
+    if (!context.mounted) return;
     // Show a loading indicator
     showDialog(
       context: context,
@@ -292,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final calleeUid = await CallManager.instance.resolveSignBridgeId(id);
       if (calleeUid == null) {
-        if (mounted) {
+        if (context.mounted) {
           Navigator.pop(context); // close loading indicator
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('User not found')),
@@ -302,7 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       final callId = await CallManager.instance.initiateCall(calleeUid);
-      if (mounted) {
+      if (context.mounted) {
         Navigator.pop(context); // close loading indicator
         Navigator.pushNamed(
           context,
@@ -311,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         Navigator.pop(context); // close loading indicator
         final errMsg = e.toString().replaceAll('Exception: ', '').replaceAll('FirebaseException: ', '');
         ScaffoldMessenger.of(context).showSnackBar(

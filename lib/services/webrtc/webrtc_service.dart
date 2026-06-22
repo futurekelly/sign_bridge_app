@@ -37,6 +37,9 @@ class WebRTCService {
   MediaStream? _remoteStream;
   RTCDataChannel? _dataChannel;
 
+  /// Expose the local video track for camera frame capture by the AI pipeline.
+  MediaStreamTrack? get localVideoTrack => _localStream?.getVideoTracks().firstOrNull;
+
   // ── Dispose guard ──
   bool _disposed = false;
 

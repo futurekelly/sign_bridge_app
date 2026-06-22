@@ -79,7 +79,7 @@ class ConversationCard extends StatelessWidget {
                           ),
                           if (msg.fromPeer) ...[
                             const SizedBox(width: AppSpacing.sm),
-                            _MetaChip(
+                            const _MetaChip(
                               icon: Icons.person,
                               label: 'Peer',
                               color: AppColors.accent,

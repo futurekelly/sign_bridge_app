@@ -27,6 +27,7 @@ import '../data/models/recent_call.dart';
 import '../data/repositories/recent_calls_repository.dart';
 import 'translation_controller.dart';
 import '../services/webrtc/call_manager.dart';
+import '../services/ai/inference_manager.dart';
 
 enum CallState { idle, connecting, inCall, ended, error }
 
@@ -37,6 +38,9 @@ class CallController extends ChangeNotifier {
 
   // AI orchestrator owned by the call.
   final TranslationController translation = TranslationController();
+
+  /// Exposes the InferenceManager for UI access to performance stats and hand landmarks
+  InferenceManager get inferenceManager => translation.inferenceManager;
 
   SignalingService? _signaling;
 
@@ -73,6 +77,39 @@ class CallController extends ChangeNotifier {
   /// Whether the current user initiated the call.
   bool _isCaller = false;
   bool get isCaller => _isCaller;
+
+  StreamSubscription? _callDocSub;
+
+  void _listenToCallDoc(String callId) {
+    debugPrint('[CallController] Subscribing to call document lifecycle: /calls/$callId');
+    _callDocSub?.cancel();
+    _callDocSub = FirebaseFirestore.instance
+        .collection('calls')
+        .doc(callId)
+        .snapshots()
+        .listen((snap) {
+      if (!snap.exists) {
+        if (_state == CallState.inCall || _state == CallState.connecting) {
+          debugPrint('[CallController] Call doc /calls/$callId deleted. Transitioning to CallState.ended.');
+          _setState(CallState.ended);
+        }
+      } else {
+        final data = snap.data();
+        if (data != null) {
+          final status = data['status'];
+          debugPrint('[CallController] Call doc status update: $status');
+          if (status == 'ended' || status == 'rejected' || status == 'caller_cancelled') {
+            if (_state == CallState.inCall || _state == CallState.connecting) {
+              debugPrint('[CallController] Call document status is $status. Transitioning to CallState.ended.');
+              _setState(CallState.ended);
+            }
+          }
+        }
+      }
+    }, onError: (err) {
+      debugPrint('[CallController] Call doc listener error: $err');
+    });
+  }
 
   // ─────────────────────────────────────────────
   // ENTRY POINTS
@@ -113,6 +150,7 @@ class CallController extends ChangeNotifier {
           await _signaling!.createCall(callId);
           _callStartTime = DateTime.now();
           _setState(CallState.inCall);
+          _listenToCallDoc(callId); // Start listening to call doc changes during call
         } catch (e) {
           _fail('Failed to connect: $e');
         }
@@ -154,6 +192,7 @@ class CallController extends ChangeNotifier {
       _callId = callId;
       _callStartTime = DateTime.now();
       _setState(CallState.inCall);
+      _listenToCallDoc(callId); // Start listening to call doc changes during call
       return true;
     } catch (e) {
       _fail('Failed to join call: $e');
@@ -216,7 +255,10 @@ class CallController extends ChangeNotifier {
         if (!_translationStarted) {
           _translationStarted = true;
           debugPrint('[CallController] P2P confirmed — starting translation pipeline (lang: $_languageCode)');
-          translation.start(languageCode: _languageCode);
+          translation.start(
+            languageCode: _languageCode,
+            localVideoTrack: webrtc.localVideoTrack,
+          );
         }
       };
 
@@ -252,6 +294,9 @@ class CallController extends ChangeNotifier {
   Future<void> endCall() async {
     if (_disposed) return;
     _disposed = true;
+
+    _callDocSub?.cancel();
+    _callDocSub = null;
 
     // Save to recent calls before cleanup.
     await _saveRecentCall();
@@ -313,6 +358,9 @@ class CallController extends ChangeNotifier {
   // ─────────────────────────────────────────────
 
   Future<void> _fail(String msg) async {
+    _callDocSub?.cancel();
+    _callDocSub = null;
+
     _errorMessage = msg;
     _setState(CallState.error);
 
@@ -357,6 +405,7 @@ class CallController extends ChangeNotifier {
   void dispose() {
     if (!_disposed) {
       _disposed = true;
+      _callDocSub?.cancel();
       _signaling?.dispose();
       translation.dispose();
       webrtc.dispose();

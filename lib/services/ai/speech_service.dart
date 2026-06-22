@@ -5,6 +5,7 @@
 // keeping the AI pipeline uniform.
 
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../core/enums.dart';
 import '../../data/models/translation_message.dart';
@@ -33,12 +34,18 @@ class SpeechService {
     _locale = locale;
     if (_initialized) return true;
 
-    _initialized = await _stt.initialize(
-      onStatus: _onPluginStatus,
-      onError: (e) {
-        _statusCtrl.add(AiStatus.error);
-      },
-    );
+    try {
+      _initialized = await _stt.initialize(
+        onStatus: _onPluginStatus,
+        onError: (e) {
+          debugPrint('[SpeechService] SpeechToText error callback: $e');
+          _statusCtrl.add(AiStatus.error);
+        },
+      );
+    } catch (e) {
+      debugPrint('[SpeechService] Failed to initialize SpeechToText (not supported on this device?): $e');
+      _initialized = false;
+    }
     return _initialized;
   }
 
@@ -46,6 +53,7 @@ class SpeechService {
     if (!_initialized) {
       final ok = await initialize(locale: _locale);
       if (!ok) {
+        debugPrint('[SpeechService] Skipping start: SpeechToText is not available on this device.');
         _statusCtrl.add(AiStatus.error);
         return;
       }
@@ -55,24 +63,30 @@ class SpeechService {
     _statusCtrl.add(AiStatus.listening);
     _listening = true;
 
-    await _stt.listen(
-      localeId: _locale,
-      listenOptions: stt.SpeechListenOptions(
-        listenMode: stt.ListenMode.dictation,
-        partialResults: true,
-      ),
-      onResult: (result) {
-        // Only emit final results to avoid spamming UI/DataChannel.
-        if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {
-          _resultCtrl.add(TranslationMessage(
-            text: result.recognizedWords.trim(),
-            source: 'speech',
-            language: languageTag,
-            // gifKey is set later by the GestureMapperService.
-          ));
-        }
-      },
-    );
+    try {
+      await _stt.listen(
+        localeId: _locale,
+        listenOptions: stt.SpeechListenOptions(
+          listenMode: stt.ListenMode.dictation,
+          partialResults: true,
+        ),
+        onResult: (result) {
+          // Only emit final results to avoid spamming UI/DataChannel.
+          if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {
+            _resultCtrl.add(TranslationMessage(
+              text: result.recognizedWords.trim(),
+              source: 'speech',
+              language: languageTag,
+              // gifKey is set later by the GestureMapperService.
+            ));
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('[SpeechService] Error during listen: $e');
+      _listening = false;
+      _statusCtrl.add(AiStatus.error);
+    }
   }
 
   Future<void> stop() async {

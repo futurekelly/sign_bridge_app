@@ -255,7 +255,7 @@ class _ResourceCard extends StatelessWidget {
                             BorderRadius.circular(AppRadius.sm),
                       ),
                       child: Text(resource.category,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 10,
                             color: AppColors.secondary,
                             fontWeight: FontWeight.w500,

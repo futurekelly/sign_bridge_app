@@ -10,6 +10,7 @@ import '../ui/screens/history_screen.dart';
 import '../ui/screens/settings_screen.dart';
 import '../ui/screens/learning_screen.dart';
 import '../ui/screens/contacts_screen.dart';
+import '../ui/screens/profile_setup_screen.dart';
 
 class AppRoutes {
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -22,6 +23,7 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String learning = '/learning';
   static const String contacts = '/contacts';
+  static const String profileSetup = '/profile_setup';
 
   static Map<String, WidgetBuilder> routes = {
     onboarding: (_) => const OnboardingScreen(),
@@ -32,5 +34,6 @@ class AppRoutes {
     settings:   (_) => const SettingsScreen(),
     learning:   (_) => const LearningScreen(),
     contacts:   (_) => const ContactsScreen(),
+    profileSetup: (_) => const ProfileSetupScreen(),
   };
 }

@@ -59,6 +59,13 @@ ios/Runner/GoogleService-Info.plist
 lib/firebase_options.dart
 firebase.json
 .env
-
-
 # (Removed /mchongo/ so your documentation pushes to GitHub)
+
+# Python & ML Artifacts
+python_scripts/venv/
+python_scripts/.venv/
+python_scripts/__pycache__/
+python_scripts/keypoint.csv
+python_scripts/gesture_classifier.tflite
+python_scripts/gesture_model_saved/
+*.pyc

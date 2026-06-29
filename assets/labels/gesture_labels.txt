@@ -1,5 +1,5 @@
 hello
-thank_you
 yes
 no
 help
+thank_you

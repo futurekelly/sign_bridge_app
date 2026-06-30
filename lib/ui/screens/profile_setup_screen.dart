@@ -108,18 +108,44 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with TickerProv
     _cascadeController.forward();
   }
 
-  void _prepopulateFields() {
+  String? _existingUsername;
+
+  void _prepopulateFields() async {
     final user = _auth.currentUser;
     if (user != null) {
-      final String displayName = user.displayName ?? '';
-      _nameController.text = displayName;
+      if (mounted) {
+        setState(() {
+          _nameController.text = user.displayName ?? '';
+        });
+      }
       
+      try {
+        final profile = await _auth.getUserProfile();
+        if (profile != null) {
+          final existingId = profile['signBridgeId'] as String?;
+          if (existingId != null && existingId.isNotEmpty) {
+            if (mounted) {
+              setState(() {
+                _usernameController.text = existingId;
+                _existingUsername = existingId;
+              });
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('[ProfileSetup] Failed to load profile: $e');
+      }
+
       // Auto-suggest username from email prefix or display name
       String suggestPrefix = '';
       if (user.email != null && user.email!.contains('@')) {
         suggestPrefix = user.email!.split('@')[0];
-      } else if (displayName.isNotEmpty) {
-        suggestPrefix = displayName;
+      } else {
+        final displayName = user.displayName ?? '';
+        if (displayName.isNotEmpty) {
+          suggestPrefix = displayName;
+        }
       }
       
       // Sanitize username suggest: lowercase, remove non-alphanumeric, max length 12
@@ -127,10 +153,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with TickerProv
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-z0-9_]'), '');
       
-      if (clean.length > 12) {
-        _usernameController.text = clean.substring(0, 12);
-      } else if (clean.isNotEmpty) {
-        _usernameController.text = clean;
+      if (mounted) {
+        setState(() {
+          if (clean.length > 12) {
+            _usernameController.text = clean.substring(0, 12);
+          } else if (clean.isNotEmpty) {
+            _usernameController.text = clean;
+          }
+        });
       }
     }
   }
@@ -168,14 +198,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with TickerProv
     });
 
     try {
-      // 1. Check unique username in Firestore
-      final isUnique = await _auth.isUsernameUnique(username);
-      if (!isUnique) {
-        setState(() {
-          _error = a11y.t('profile_setup.id_taken');
-          _busy = false;
-        });
-        return;
+      // 1. Check unique username in Firestore (only if it has changed!)
+      if (username != _existingUsername) {
+        final isUnique = await _auth.isUsernameUnique(username);
+        if (!isUnique) {
+          setState(() {
+            _error = a11y.t('profile_setup.id_taken');
+            _busy = false;
+          });
+          return;
+        }
       }
 
       // 2. Transaction setup for google/guest users to write to usernames doc and user doc atomically

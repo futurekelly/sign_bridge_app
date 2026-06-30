@@ -404,8 +404,46 @@ class _CallViewState extends State<_CallView> {
                 ),
               ),
 
-            // Visible toolbar removed for a clean, hands-free camera prediction feel.
-            // Under-the-hood gestures are triggered via tapping Local Preview/Remote View.
+            // Floating Quick Sign Toolbar (Only shown to Deaf or Both roles)
+            if (role == UserRole.deaf || role == UserRole.both)
+              Positioned(
+                bottom: 130,
+                left: 16,
+                right: 16,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white12, width: 1.5),
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildQuickSignButton(controller, 'hello', '👋', 'Habari / Hello'),
+                          const SizedBox(width: 8),
+                          _buildQuickSignButton(controller, 'yes', '☝️', 'Ndiyo / Yes'),
+                          const SizedBox(width: 8),
+                          _buildQuickSignButton(controller, 'no', '✌️', 'Hapana / No'),
+                          const SizedBox(width: 8),
+                          _buildQuickSignButton(controller, 'help', '🤟', 'Msaada / Help'),
+                          const SizedBox(width: 8),
+                          _buildQuickSignButton(controller, 'water', '💧', 'Maji / Water'),
+                          const SizedBox(width: 8),
+                          _buildQuickSignButton(controller, 'good', '👍', 'Nzuri / Good'),
+                          const SizedBox(width: 8),
+                          _buildQuickSignButton(controller, 'stop', '✊', 'Simama / Stop'),
+                          const SizedBox(width: 8),
+                          _buildQuickSignButton(controller, 'iloveyou', '🤙', 'Nakupenda / Love'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
             // Bottom controls
             Align(
@@ -424,6 +462,47 @@ class _CallViewState extends State<_CallView> {
     );
   }
 
+  Widget _buildQuickSignButton(CallController controller, String label, String emoji, String text) {
+    final activeLabel = controller.inferenceManager.prediction;
+    final isSelected = activeLabel == label;
+
+    return Material(
+      color: isSelected ? Colors.teal.withValues(alpha: 0.8) : Colors.white10,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          _triggerSimulatedSign(controller, label);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 6),
+              Text(
+                text,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _triggerSimulatedSign(CallController controller, String label) {
+    controller.inferenceManager.setSimulationLabel(label);
+    // Auto reset to idle waving animation after 4 seconds
+    Timer(const Duration(seconds: 4), () {
+      controller.inferenceManager.setSimulationLabel('idle');
+    });
+  }
 }
 
 // ── Call ID Banner ──

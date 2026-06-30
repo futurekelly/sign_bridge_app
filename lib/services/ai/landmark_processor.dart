@@ -16,6 +16,7 @@ class HandLandmark {
 class LandmarkProcessor {
   // Angle used to simulate coordinate movements over time
   double _animationAngle = 0.0;
+  String activeSimulationLabel = 'idle';
 
   /// Processes raw image bytes and returns a list of 21 extracted hand landmarks.
   /// Measures execution latency for performance validation.
@@ -23,12 +24,9 @@ class LandmarkProcessor {
     final stopwatch = Stopwatch()..start();
 
     // 1. Simulating image parsing (YUV/RGBA dimensions checks)
-    // Normally, we would decode or extract metadata from the byte list here.
-    // We add a small mock delay (e.g. 5-10ms) to simulate native decoding overhead.
     await Future.delayed(Duration(milliseconds: 5 + Random().nextInt(5)));
 
     // 2. Generating 21 landmarks mapping the hand joints
-    // We animate them dynamically to represent a hand open/close or tracing wave
     _animationAngle += 0.15;
     if (_animationAngle > 2 * pi) {
       _animationAngle -= 2 * pi;
@@ -37,37 +35,84 @@ class LandmarkProcessor {
     final List<HandLandmark> landmarks = [];
     
     // Hand Center (Wrist - Joint 0)
-    final double wristX = 0.5 + 0.1 * sin(_animationAngle);
-    final double wristY = 0.6 + 0.05 * cos(_animationAngle * 1.5);
+    const double wristX = 0.5;
+    const double wristY = 0.65;
     landmarks.add(HandLandmark(0, wristX, wristY, 0.0));
 
-    // Generate 5 fingers (4 joints each: 1-4 thumb, 5-8 index, 9-12 middle, 13-16 ring, 17-20 pinky)
-    // We model them spreading out from the wrist
-    final fingerAngles = [-0.6, -0.2, 0.1, 0.4, 0.7]; // angles for each finger relative to wrist
+    // Determine finger extensions based on active simulation label (Milestone 2/3 TSL vocabulary)
+    bool thumbExt = true;
+    bool indexExt = true;
+    bool middleExt = true;
+    bool ringExt = true;
+    bool pinkyExt = true;
+
+    if (activeSimulationLabel == 'hello') {
+      thumbExt = indexExt = middleExt = ringExt = pinkyExt = true;
+    } else if (activeSimulationLabel == 'yes') {
+      thumbExt = middleExt = ringExt = pinkyExt = false;
+      indexExt = true;
+    } else if (activeSimulationLabel == 'no') {
+      thumbExt = ringExt = pinkyExt = false;
+      indexExt = middleExt = true;
+    } else if (activeSimulationLabel == 'help') {
+      thumbExt = pinkyExt = false;
+      indexExt = middleExt = ringExt = true;
+    } else if (activeSimulationLabel == 'water') {
+      thumbExt = false;
+      indexExt = middleExt = ringExt = pinkyExt = true;
+    } else if (activeSimulationLabel == 'good') {
+      thumbExt = true;
+      indexExt = middleExt = ringExt = pinkyExt = false;
+    } else if (activeSimulationLabel == 'stop') {
+      thumbExt = indexExt = middleExt = ringExt = pinkyExt = false;
+    } else if (activeSimulationLabel == 'iloveyou') {
+      thumbExt = indexExt = middleExt = ringExt = false;
+      pinkyExt = true;
+    } else {
+      // Idle animated curl
+      thumbExt = true;
+      indexExt = (1.0 - 0.25 * sin(_animationAngle)) > 0.85;
+      middleExt = (1.0 - 0.25 * sin(_animationAngle + 0.5)) > 0.85;
+      ringExt = (1.0 - 0.25 * sin(_animationAngle + 1.0)) > 0.85;
+      pinkyExt = (1.0 - 0.25 * sin(_animationAngle + 1.5)) > 0.85;
+    }
+
+    // Generate 5 fingers (4 joints each)
+    // Angles relative to wrist base
+    final fingerAngles = [-0.65, -0.25, 0.05, 0.35, 0.65];
     int jointId = 1;
 
     for (int f = 0; f < 5; f++) {
-      final double fAngle = fingerAngles[f] + 0.05 * sin(_animationAngle * 2.0);
+      final double fAngle = fingerAngles[f];
       double prevX = wristX;
       double prevY = wristY;
       
-      // Joint length scales down as we go to the tip
       final jointLengths = [0.08, 0.06, 0.05, 0.04];
+      bool isExt = true;
+      if (f == 0) {
+        isExt = thumbExt;
+      } else if (f == 1) {
+        isExt = indexExt;
+      } else if (f == 2) {
+        isExt = middleExt;
+      } else if (f == 3) {
+        isExt = ringExt;
+      } else if (f == 4) {
+        isExt = pinkyExt;
+      }
+
+      final double curlFactor = isExt ? 1.0 : 0.35;
 
       for (int j = 0; j < 4; j++) {
         final double len = jointLengths[j];
-        // Dynamic finger curling
-        final double curlFactor = 1.0 - 0.2 * sin(_animationAngle + (f * 0.5));
-        
         final double dx = len * sin(fAngle) * curlFactor;
         final double dy = -len * cos(fAngle) * curlFactor;
         
         final double x = (prevX + dx).clamp(0.0, 1.0);
         final double y = (prevY + dy).clamp(0.0, 1.0);
-        final double z = -0.02 * j * sin(_animationAngle);
+        final double z = -0.01 * j;
 
         landmarks.add(HandLandmark(jointId++, x, y, z));
-        
         prevX = x;
         prevY = y;
       }

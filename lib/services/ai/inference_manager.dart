@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -200,6 +201,79 @@ class InferenceManager extends ChangeNotifier {
     );
   }
 
+  /// Expose method to change simulated gesture landmark patterns
+  void setSimulationLabel(String label) {
+    _processor.activeSimulationLabel = label;
+    notifyListeners();
+  }
+
+  /// Live deterministic rule-based gesture classification matching the web version
+  PredictionResult classifyGesture(List<HandLandmark> landmarks) {
+    if (landmarks.isEmpty) {
+      return const PredictionResult(index: 0, label: 'unknown', confidence: 0.0);
+    }
+
+    double dist(HandLandmark a, HandLandmark b) {
+      return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
+    }
+
+    final wrist = landmarks[0];
+
+    // Thumb TIP (4) vs IP joint (2) and MCP (3)
+    final thumbTip = landmarks[4];
+    final thumbJoint2 = landmarks[2];
+    final thumbJoint3 = landmarks[3];
+    bool thumbExtended = dist(thumbTip, thumbJoint2) > dist(thumbJoint3, thumbJoint2) * 1.1;
+
+    // Index TIP (8) vs PIP joint (6)
+    bool indexExtended = dist(landmarks[8], wrist) > dist(landmarks[6], wrist) * 1.05;
+
+    // Middle TIP (12) vs PIP joint (10)
+    bool middleExtended = dist(landmarks[12], wrist) > dist(landmarks[10], wrist) * 1.05;
+
+    // Ring TIP (16) vs PIP joint (14)
+    bool ringExtended = dist(landmarks[16], wrist) > dist(landmarks[14], wrist) * 1.05;
+
+    // Pinky TIP (20) vs PIP joint (18)
+    bool pinkyExtended = dist(landmarks[20], wrist) > dist(landmarks[18], wrist) * 1.05;
+
+    // Determine TSL gesture label matching the student's counterpart rules
+    String label = 'unknown';
+    int index = 0;
+
+    if (thumbExtended && indexExtended && middleExtended && ringExtended && pinkyExtended) {
+      label = 'hello';
+      index = 1;
+    } else if (!thumbExtended && indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
+      label = 'yes';
+      index = 2;
+    } else if (!thumbExtended && indexExtended && middleExtended && !ringExtended && !pinkyExtended) {
+      label = 'no';
+      index = 3;
+    } else if (!thumbExtended && indexExtended && middleExtended && ringExtended && !pinkyExtended) {
+      label = 'help';
+      index = 4;
+    } else if (!thumbExtended && indexExtended && middleExtended && ringExtended && pinkyExtended) {
+      label = 'water';
+      index = 5;
+    } else if (thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
+      label = 'good';
+      index = 6;
+    } else if (!thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
+      label = 'stop';
+      index = 7;
+    } else if (!thumbExtended && !indexExtended && !middleExtended && !ringExtended && pinkyExtended) {
+      label = 'iloveyou';
+      index = 8;
+    }
+
+    return PredictionResult(
+      index: index,
+      label: label,
+      confidence: label != 'unknown' ? 1.0 : 0.0,
+    );
+  }
+
   /// Debug method to verify TFLite execution by feeding a dummy 42-element float array.
   Future<PredictionResult> runDummyPrediction() async {
     if (!_isInitialized) {
@@ -291,28 +365,14 @@ class InferenceManager extends ChangeNotifier {
 
       _currentLandmarks = landmarks;
 
-      // 2. Muted for Demo/Presentation: Live camera-based automatic TFLite inference
-      // is disabled to avoid continuous background "hello" triggers.
-      // Quick Sign Toolbar (Emoji Grid) will instead trigger stabilized gestures with 100% accuracy.
-      /*
+      // 2. Deterministic rule-based gesture classification matching web counterpart
       if (landmarks.isNotEmpty) {
-        final normalizedVector = normalizeLandmarks(landmarks);
-        if (normalizedVector.length == 42 && _isInitialized) {
-          final result = predict(normalizedVector);
-          
-          // Debug logging format specified by Milestone 2
-          debugPrint('Predicted: ${result.label}, confidence: ${(result.confidence * 100).toStringAsFixed(0)}%');
-
-          // Confidence threshold check (confidence >= 0.80)
-          if (result.confidence >= 0.80) {
-            _prediction = result.label;
-          }
-
-          // Pass raw inference result to PredictionStabilizer pipeline (Milestone 3)
+        final result = classifyGesture(landmarks);
+        if (result.label != 'unknown') {
+          _prediction = result.label;
           stabilizer.processPrediction(result);
         }
       }
-      */
 
       notifyListeners();
     } catch (e) {

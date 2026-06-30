@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     CallManager.instance.startListening();
+    CallManager.instance.recoverStaleBusyState(); // Heal stale busy status on app startup/return
     _loadProfile();
     _loadRecentCalls();
   }

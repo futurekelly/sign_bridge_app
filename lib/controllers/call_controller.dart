@@ -332,6 +332,17 @@ class CallController extends ChangeNotifier {
       }
     }
 
+    // Always self-heal our own Firestore status back to 'idle' on exit to prevent stale busy states
+    try {
+      final myUid = _auth.currentUser?.uid;
+      if (myUid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(myUid).update({'status': 'idle'});
+        debugPrint('[CallController] Reset local user status to idle');
+      }
+    } catch (e) {
+      debugPrint('[CallController] Failed to reset status to idle: $e');
+    }
+
     try { await _signaling?.dispose(); } catch (_) {}
 
     // 4) Dispose WebRTC resources last.

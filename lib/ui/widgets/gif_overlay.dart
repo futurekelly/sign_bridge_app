@@ -59,9 +59,9 @@ class _GifOverlayState extends State<GifOverlay>
     });
     _animCtrl.forward();
 
-    // Auto-hide after 5 seconds.
+    // Auto-hide after 3 seconds.
     _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 5), () {
+    _hideTimer = Timer(const Duration(seconds: 3), () {
       _animCtrl.reverse().then((_) {
         if (mounted) setState(() => _visible = false);
       });

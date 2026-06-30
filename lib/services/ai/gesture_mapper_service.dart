@@ -20,6 +20,8 @@ class GestureMapperService {
     'help': 'help',
     'yes': 'yes',
     'no': 'no',
+    'wewe': 'wewe',
+    'mimi': 'mimi',
   };
 
   /// Best-effort match for the input text.

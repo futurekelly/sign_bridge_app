@@ -11,11 +11,11 @@ class AccessibilityHelper {
 
   /// Animated GIF translation panel (sign language visuals).
   static bool shouldShowGifPanel(UserRole role) =>
-      role == UserRole.deaf;
+      role == UserRole.deaf || role == UserRole.both;
 
   /// Real-time captions / subtitles overlay.
   static bool shouldShowCaptions(UserRole role) =>
-      role == UserRole.deaf || role == UserRole.both;
+      role == UserRole.deaf || role == UserRole.both || role == UserRole.hearing;
 
   /// Text-to-Speech playback of recognised gestures.
   static bool shouldEnableTTS(UserRole role) =>

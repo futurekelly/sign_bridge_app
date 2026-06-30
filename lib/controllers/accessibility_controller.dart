@@ -20,12 +20,21 @@ class AccessibilityController extends ChangeNotifier {
   bool _visualNotifications = false;
   String _languageCode = 'en';
 
+  // Deaf Alert Options (Milestone 4B Upgrades)
+  bool _ttsEnabled = true;
+  bool _vibrationEnabled = true;
+  bool _flashlightEnabled = false;
+
   // ── Getters ──
   UserRole get role => _role;
   bool get captionsEnabled => _captionsEnabled;
   double get captionFontSize => _captionFontSize;
   bool get visualNotifications => _visualNotifications;
   String get languageCode => _languageCode;
+  
+  bool get ttsEnabled => _ttsEnabled;
+  bool get vibrationEnabled => _vibrationEnabled;
+  bool get flashlightEnabled => _flashlightEnabled;
 
   // ── Convenience ──
   bool get isDeaf    => _role == UserRole.deaf;
@@ -44,14 +53,23 @@ class AccessibilityController extends ChangeNotifier {
       _captionsEnabled = true;
       _visualNotifications = true;
       _captionFontSize = 18.0;
+      _vibrationEnabled = true;
+      _flashlightEnabled = true;
+      _ttsEnabled = false; // Deaf user signing, TTS voice typically not needed locally
     } else if (role == UserRole.hearing) {
       _captionsEnabled = false;
       _visualNotifications = false;
       _captionFontSize = 16.0;
+      _vibrationEnabled = false;
+      _flashlightEnabled = false;
+      _ttsEnabled = true;
     } else {
       _captionsEnabled = true;
       _visualNotifications = true;
       _captionFontSize = 16.0;
+      _vibrationEnabled = true;
+      _flashlightEnabled = false;
+      _ttsEnabled = true;
     }
     await _save();
     notifyListeners();
@@ -81,6 +99,24 @@ class AccessibilityController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setTtsEnabled(bool v) async {
+    _ttsEnabled = v;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setVibrationEnabled(bool v) async {
+    _vibrationEnabled = v;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setFlashlightEnabled(bool v) async {
+    _flashlightEnabled = v;
+    await _save();
+    notifyListeners();
+  }
+
   // ── Persistence ──
 
   void _load() {
@@ -90,6 +126,10 @@ class AccessibilityController extends ChangeNotifier {
     _captionFontSize = (_box.get('captionFontSize', defaultValue: 16.0) as num).toDouble();
     _visualNotifications = _box.get('visualNotifications', defaultValue: false) as bool;
     _languageCode = _box.get('languageCode', defaultValue: 'en') as String;
+    
+    _ttsEnabled = _box.get('ttsEnabled', defaultValue: true) as bool;
+    _vibrationEnabled = _box.get('vibrationEnabled', defaultValue: true) as bool;
+    _flashlightEnabled = _box.get('flashlightEnabled', defaultValue: false) as bool;
   }
 
   Future<void> _save() async {
@@ -98,5 +138,9 @@ class AccessibilityController extends ChangeNotifier {
     await _box.put('captionFontSize', _captionFontSize);
     await _box.put('visualNotifications', _visualNotifications);
     await _box.put('languageCode', _languageCode);
+    
+    await _box.put('ttsEnabled', _ttsEnabled);
+    await _box.put('vibrationEnabled', _vibrationEnabled);
+    await _box.put('flashlightEnabled', _flashlightEnabled);
   }
 }

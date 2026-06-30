@@ -96,6 +96,12 @@ class AppTranslations {
       'settings.visual_notif': 'Visual Notifications',
       'settings.visual_notif_desc':
           'Use vibration and flash instead of audio alerts',
+      'settings.tts_enabled': 'Text-to-Speech Voice',
+      'settings.tts_desc': 'Speak translated signs aloud',
+      'settings.vibration': 'Vibration Alerts',
+      'settings.vibration_desc': 'Vibrate device on incoming calls/alerts',
+      'settings.flashlight': 'Flashlight Alerts',
+      'settings.flashlight_desc': 'Flash camera LED on incoming calls/alerts',
       'settings.about': 'About',
       'settings.version': 'Version',
       'settings.developer': 'Developer',
@@ -147,6 +153,15 @@ class AppTranslations {
       'nav.history': 'History',
       'nav.learn': 'Learn',
       'nav.settings': 'Settings',
+
+      // Gestures
+      'gesture.hello': 'Hello',
+      'gesture.yes': 'Yes',
+      'gesture.no': 'No',
+      'gesture.help': 'Help',
+      'gesture.thank_you': 'Thank You',
+      'gesture.wewe': 'You',
+      'gesture.mimi': 'Me',
 
       // Contacts
       'contacts.title': 'Saved Contacts',
@@ -275,6 +290,12 @@ class AppTranslations {
       'settings.visual_notif': 'Arifa za Kuona',
       'settings.visual_notif_desc':
           'Tumia mtetemo na mwanga badala ya arifa za sauti',
+      'settings.tts_enabled': 'Sauti ya Maandishi (TTS)',
+      'settings.tts_desc': 'Soma ishara zilizotafsiriwa kwa sauti',
+      'settings.vibration': 'Arifa za Mtetemo',
+      'settings.vibration_desc': 'Tisha kifaa wakati simu au ujumbe unaingia',
+      'settings.flashlight': 'Arifa za Mwanga (Flash)',
+      'settings.flashlight_desc': 'Washa tochi wakati simu au ujumbe unaingia',
       'settings.about': 'Kuhusu',
       'settings.version': 'Toleo',
       'settings.developer': 'Msanidi',
@@ -326,6 +347,15 @@ class AppTranslations {
       'nav.history': 'Historia',
       'nav.learn': 'Jifunze',
       'nav.settings': 'Mipangilio',
+
+      // Gestures
+      'gesture.hello': 'Habari',
+      'gesture.yes': 'Ndiyo',
+      'gesture.no': 'Hapana',
+      'gesture.help': 'Msaada',
+      'gesture.thank_you': 'Asante',
+      'gesture.wewe': 'Wewe',
+      'gesture.mimi': 'Mimi',
 
       // Contacts
       'contacts.title': 'Mawasiliano',

@@ -59,7 +59,7 @@ class _CaptionOverlayState extends State<CaptionOverlay>
     _animCtrl.forward();
 
     _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 8), () {
+    _hideTimer = Timer(const Duration(seconds: 3), () {
       _animCtrl.reverse().then((_) {
         if (mounted) setState(() => _visible = false);
       });

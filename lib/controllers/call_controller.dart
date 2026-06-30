@@ -74,6 +74,8 @@ class CallController extends ChangeNotifier {
   /// even if onRemoteStreamAdded fires multiple times.
   bool _translationStarted = false;
 
+  bool _ttsEnabled = true;
+
   /// Whether the current user initiated the call.
   bool _isCaller = false;
   bool get isCaller => _isCaller;
@@ -115,9 +117,10 @@ class CallController extends ChangeNotifier {
   // ENTRY POINTS
   // ─────────────────────────────────────────────
 
-  Future<bool> startAsCaller(String callId, String calleeUid, {String languageCode = 'en'}) async {
+  Future<bool> startAsCaller(String callId, String calleeUid, {String languageCode = 'en', bool ttsEnabled = true}) async {
     _isCaller = true;
     _languageCode = languageCode;
+    _ttsEnabled = ttsEnabled;
     _peerUid = calleeUid;
     _callId = callId;
 
@@ -177,9 +180,10 @@ class CallController extends ChangeNotifier {
     return true;
   }
 
-  Future<bool> startAsCallee(String callId, String callerUid, {String languageCode = 'en'}) async {
+  Future<bool> startAsCallee(String callId, String callerUid, {String languageCode = 'en', bool ttsEnabled = true}) async {
     _isCaller = false;
     _languageCode = languageCode;
+    _ttsEnabled = ttsEnabled;
     _peerUid = callerUid;
     final ok = await _bootstrap();
     if (!ok) return false;
@@ -254,10 +258,11 @@ class CallController extends ChangeNotifier {
 
         if (!_translationStarted) {
           _translationStarted = true;
-          debugPrint('[CallController] P2P confirmed — starting translation pipeline (lang: $_languageCode)');
+          debugPrint('[CallController] P2P confirmed — starting translation pipeline (lang: $_languageCode, tts: $_ttsEnabled)');
           translation.start(
             languageCode: _languageCode,
             localVideoTrack: webrtc.localVideoTrack,
+            ttsEnabled: _ttsEnabled,
           );
         }
       };

@@ -257,16 +257,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          // ── Notifications ──
+          // ── Notifications & Alerts ──
           _SectionCard(
             title: a11y.t('settings.notifications'),
             icon: Icons.notifications_outlined,
             children: [
               SwitchListTile(
-                title: Text(a11y.t('settings.visual_notif')),
-                subtitle: Text(a11y.t('settings.visual_notif_desc')),
-                value: a11y.visualNotifications,
-                onChanged: a11y.setVisualNotifications,
+                title: Text(a11y.t('settings.tts_enabled')),
+                subtitle: Text(a11y.t('settings.tts_desc')),
+                value: a11y.ttsEnabled,
+                onChanged: a11y.setTtsEnabled,
+                activeTrackColor: AppColors.primary,
+              ),
+              SwitchListTile(
+                title: Text(a11y.t('settings.vibration')),
+                subtitle: Text(a11y.t('settings.vibration_desc')),
+                value: a11y.vibrationEnabled,
+                onChanged: a11y.setVibrationEnabled,
+                activeTrackColor: AppColors.primary,
+              ),
+              SwitchListTile(
+                title: Text(a11y.t('settings.flashlight')),
+                subtitle: Text(a11y.t('settings.flashlight_desc')),
+                value: a11y.flashlightEnabled,
+                onChanged: a11y.setFlashlightEnabled,
                 activeTrackColor: AppColors.primary,
               ),
             ],

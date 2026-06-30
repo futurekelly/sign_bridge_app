@@ -3,7 +3,7 @@
 // ⭐ THE ONLY PLACE THAT TALKS TO AI SERVICES. ⭐
 //
 // Responsibilities:
-//   1. Subscribes to GestureRecognitionService + SpeechService streams
+//   1. Subscribes to PredictionStabilizer.stablePredictionStream + SpeechService streams
 //   2. Enriches results with gifKey via GestureMapperService
 //   3. Speaks gesture results via TTSService (Deaf → Hearing)
 //   4. Persists every result to HistoryRepository
@@ -11,13 +11,12 @@
 //        • liveResultStream  → transient (caption + gif overlays)
 //        • historyStream     → cumulative (translation_panel)
 //        • statusStream      → AiStatus (ai_status_overlay)
-//   6. Accepts incoming peer messages from DataChannel (Phase 6)
+//   6. Accepts incoming peer messages from DataChannel and forwards local messages
 //
 // CONTRACT (enforced):
 //   - UI widgets NEVER import or instantiate AI services directly.
 //   - UI widgets ONLY listen to the 3 streams above.
-//   - Outbound DataChannel sending happens through `onOutgoing` callback,
-//     which Phase 6 will wire to WebRTCService.sendDataChannelMessage().
+//   - Outbound DataChannel sending happens through `onOutgoing` callback.
 // ════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -26,6 +25,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../core/enums.dart';
+import '../core/translations.dart';
 import '../data/models/translation_message.dart';
 import '../data/repositories/history_repository.dart';
 import '../services/ai/gesture_recognition_service.dart';
@@ -41,9 +41,9 @@ class TranslationController extends ChangeNotifier {
   final TTSService _tts;
   final HistoryRepository _history;
 
-  // ── Outbound hook (set by CallController in Phase 6) ──
+  // ── Outbound hook (set by CallController) ──
   /// Called whenever a LOCAL result is produced.
-  /// Phase 6 will wire this to WebRTCService.sendDataChannelMessage(json).
+  /// Wired to WebRTCService.sendDataChannelMessage(json).
   void Function(String jsonPayload)? onOutgoing;
 
   // ── Public streams (the contract with UI) ──
@@ -69,6 +69,7 @@ class TranslationController extends ChangeNotifier {
 
   bool _started = false;
   String _languageCode = 'en';
+  bool _ttsEnabled = true;
   AiStatus _currentStatus = AiStatus.idle;
   String get languageTag => _languageCode;
 
@@ -93,10 +94,15 @@ class TranslationController extends ChangeNotifier {
   // LIFECYCLE
   // ─────────────────────────────────────────────
 
-  Future<void> start({String languageCode = 'en', MediaStreamTrack? localVideoTrack}) async {
+  Future<void> start({
+    String languageCode = 'en',
+    MediaStreamTrack? localVideoTrack,
+    bool ttsEnabled = true,
+  }) async {
     if (_started) return;
     _started = true;
     _languageCode = languageCode;
+    _ttsEnabled = ttsEnabled;
 
     // Determine locale codes based on language selection.
     final ttsLang = languageCode == 'sw' ? 'sw-TZ' : 'en-US';
@@ -105,9 +111,8 @@ class TranslationController extends ChangeNotifier {
     // Initialize TTS with the correct language.
     await _tts.initialize(language: ttsLang);
 
-    // Subscribe to AI service outputs BEFORE starting them
-    // so we don't miss the first events.
-    _subs.add(_gesture.resultStream.listen(_onGestureResult));
+    // Milestone 4B: Subscribe to PredictionStabilizer.stablePredictionStream
+    _subs.add(_gesture.inferenceManager.stabilizer.stablePredictionStream.listen(_onStablePrediction));
     _subs.add(_gesture.statusStream.listen(_emitStatus));
 
     _subs.add(_speech.resultStream.listen(_onSpeechResult));
@@ -147,19 +152,24 @@ class TranslationController extends ChangeNotifier {
   // INCOMING (LOCAL AI)
   // ─────────────────────────────────────────────
 
-  /// Local gesture recognition → text + voice + GIF.
-  void _onGestureResult(TranslationMessage raw) {
-    // Gesture labels already include their own gifKey from the AI service,
-    // but we re-validate via the mapper to ensure asset existence rules
-    // stay centralized.
-    final enriched = raw.copyWith(
-      gifKey: GestureMapperService.mapTextToGifKey(raw.text) ?? raw.gifKey,
+  /// Milestone 4B: Handles stabilized predictions from PredictionStabilizer.
+  /// Publishes locally, forwards to remote peer via DataChannel, and speaks via TTS if enabled.
+  void _onStablePrediction(PredictionResult result) {
+    final String rawLabel = result.label;
+    final String gifKey = GestureMapperService.mapTextToGifKey(rawLabel) ?? rawLabel;
+    final String translatedText = AppTranslations.t('gesture.$rawLabel', _languageCode);
+
+    final msg = TranslationMessage(
+      text: translatedText,
+      source: 'gesture',
+      language: _languageCode,
+      gifKey: gifKey,
     );
 
-    _publishLocal(enriched);
-
-    // Deaf → Hearing direction: speak it aloud.
-    _tts.speak(enriched.text);
+    _publishLocal(msg);
+    if (_ttsEnabled) {
+      _tts.speak(translatedText);
+    }
   }
 
   /// Local speech recognition → text + GIF lookup (no TTS, no echo).
@@ -171,13 +181,11 @@ class TranslationController extends ChangeNotifier {
   }
 
   // ─────────────────────────────────────────────
-  // INCOMING (FROM PEER VIA DATACHANNEL — Phase 6 entry point)
+  // INCOMING (FROM PEER VIA DATACHANNEL)
   // ─────────────────────────────────────────────
 
-  /// Phase 6 hook: called by CallController when a JSON payload arrives
-  /// over the WebRTC DataChannel. We funnel it through the SAME pipeline
-  /// the local UI listens to — so peer-originated and local-originated
-  /// messages render identically.
+  /// Called by CallController when a JSON payload arrives over WebRTC DataChannel.
+  /// Funnels peer messages through the same pipeline for local UI display and TTS audio if enabled.
   void handleIncomingPeerJson(String jsonPayload) {
     try {
       final map = json.decode(jsonPayload) as Map<String, dynamic>;
@@ -190,11 +198,11 @@ class TranslationController extends ChangeNotifier {
 
       _publishRemote(enriched);
 
-      // If the peer's gesture is being shown to us, we may also want
-      // TTS so the hearing user *here* can hear it. We do NOT echo
-      // peer speech back as TTS (would feedback-loop).
+      // If the peer's gesture is being shown to us, speak it aloud via TTS if enabled
       if (enriched.source == 'gesture') {
-        _tts.speak(enriched.text);
+        if (_ttsEnabled) {
+          _tts.speak(enriched.text);
+        }
       }
     } catch (e) {
       debugPrint('[TranslationController] bad peer payload: $e');
@@ -208,7 +216,7 @@ class TranslationController extends ChangeNotifier {
   void _publishLocal(TranslationMessage msg) {
     _emitMessage(msg);
 
-    // Forward to peer (DataChannel) if the hook is wired (Phase 6).
+    // Forward to peer (DataChannel) if the hook is wired.
     final outgoing = onOutgoing;
     if (outgoing != null) {
       outgoing(json.encode(msg.toJson()));
@@ -240,13 +248,21 @@ class TranslationController extends ChangeNotifier {
   }
 
   /// Simulates a local gesture result for testing (injection hook)
-  void simulateLocalGesture(String text) {
+  void simulateLocalGesture(String rawLabel) {
+    final String gifKey = GestureMapperService.mapTextToGifKey(rawLabel) ?? rawLabel;
+    final String translatedText = AppTranslations.t('gesture.$rawLabel', _languageCode);
+
     final msg = TranslationMessage(
-      text: text,
+      text: translatedText,
       source: 'gesture',
-      language: languageTag,
+      language: _languageCode,
+      gifKey: gifKey,
     );
-    _onGestureResult(msg);
+
+    _publishLocal(msg);
+    if (_ttsEnabled) {
+      _tts.speak(translatedText);
+    }
   }
 
   /// Simulates a local speech result for testing (injection hook)

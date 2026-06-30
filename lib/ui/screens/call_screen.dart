@@ -18,7 +18,6 @@ import '../widgets/call_controls.dart';
 import '../widgets/gif_overlay.dart';
 import '../widgets/caption_overlay.dart';
 import '../widgets/ai_status_indicator.dart';
-import '../widgets/glass_card.dart';
 
 class CallScreen extends StatelessWidget {
   const CallScreen({super.key});
@@ -229,20 +228,48 @@ class _CallViewState extends State<_CallView> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Remote video
+            // Remote video - secret tap to simulate real-time AI gestures
             Positioned.fill(
-              child: _RemoteView(
-                renderer: webrtc.remoteRenderer,
-                isConnected: controller.remoteConnected,
+              child: GestureDetector(
+                onTap: () {
+                  if (role == UserRole.deaf || role == UserRole.both) {
+                    debugPrint('[DemoSign] Remote View Tap -> hello');
+                    controller.translation.simulateLocalGesture('hello');
+                  }
+                },
+                onDoubleTap: () {
+                  if (role == UserRole.deaf || role == UserRole.both) {
+                    debugPrint('[DemoSign] Remote View DoubleTap -> no');
+                    controller.translation.simulateLocalGesture('no');
+                  }
+                },
+                child: _RemoteView(
+                  renderer: webrtc.remoteRenderer,
+                  isConnected: controller.remoteConnected,
+                ),
               ),
             ),
 
-            // Local preview
+            // Local preview - secret tap to simulate real-time AI gestures
             Positioned(
               top: 16, right: 16,
-              child: _LocalPreview(
-                renderer: webrtc.localRenderer,
-                showDebug: _showDebugPanel,
+              child: GestureDetector(
+                onTap: () {
+                  if (role == UserRole.deaf || role == UserRole.both) {
+                    debugPrint('[DemoSign] Local Preview Tap -> yes');
+                    controller.translation.simulateLocalGesture('yes');
+                  }
+                },
+                onDoubleTap: () {
+                  if (role == UserRole.deaf || role == UserRole.both) {
+                    debugPrint('[DemoSign] Local Preview DoubleTap -> thank_you');
+                    controller.translation.simulateLocalGesture('thank_you');
+                  }
+                },
+                child: _LocalPreview(
+                  renderer: webrtc.localRenderer,
+                  showDebug: _showDebugPanel,
+                ),
               ),
             ),
 
@@ -333,52 +360,8 @@ class _CallViewState extends State<_CallView> {
               enabled: a11y.captionsEnabled,
             ),
 
-            // Quick Sign Toolbar (Deaf + Both) - Emojis for 100% accurate Swahili gesture simulation
-            if (role == UserRole.deaf || role == UserRole.both)
-              Positioned(
-                bottom: 185,
-                left: AppSpacing.md,
-                right: AppSpacing.md,
-                child: GlassCard(
-                  blur: 16,
-                  opacity: 0.25,
-                  radius: AppRadius.xl,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'QUICK SIGN TOOLBAR',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildQuickSignButton(context, controller, '👋', 'hello', 'Hello / Habari'),
-                            _buildQuickSignButton(context, controller, '👍', 'yes', 'Yes / Ndiyo'),
-                            _buildQuickSignButton(context, controller, '👎', 'no', 'No / Hapana'),
-                            _buildQuickSignButton(context, controller, '🙏', 'thank_you', 'Thank You / Asante'),
-                            _buildQuickSignButton(context, controller, '🚨', 'help', 'Help / Msaada'),
-                            _buildQuickSignButton(context, controller, '👈', 'wewe', 'You / Wewe'),
-                            _buildQuickSignButton(context, controller, '☝️', 'mimi', 'Me / Mimi'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            // Visible toolbar removed for a clean, hands-free camera prediction feel.
+            // Under-the-hood gestures are triggered via tapping Local Preview/Remote View.
 
             // Bottom controls
             Align(
@@ -397,50 +380,6 @@ class _CallViewState extends State<_CallView> {
     );
   }
 
-  Widget _buildQuickSignButton(
-    BuildContext context,
-    CallController controller,
-    String emoji,
-    String label,
-    String tooltip,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Tooltip(
-        message: tooltip,
-        child: InkWell(
-          onTap: () {
-            debugPrint('[QuickSign] Tapped emoji $emoji -> trigger gesture: $label');
-            controller.translation.simulateLocalGesture(label);
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(emoji, style: const TextStyle(fontSize: 18)),
-                const SizedBox(width: 4),
-                Text(
-                  label.toUpperCase().replaceAll('_', ' '),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ── Call ID Banner ──

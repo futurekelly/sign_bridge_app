@@ -253,8 +253,6 @@ class AuthService {
         profile['displayName'] != null &&
         profile['displayName'].toString().trim().isNotEmpty &&
         profile['signBridgeId'] != null &&
-        profile['signBridgeId'].toString().trim().isNotEmpty &&
-        profile['role'] != null &&
-        profile['role'].toString().trim().isNotEmpty;
+        profile['signBridgeId'].toString().trim().isNotEmpty;
   }
 }

@@ -51,15 +51,45 @@ class _CaptionOverlayState extends State<CaptionOverlay>
 
   void _onMessage(TranslationMessage msg) {
     if (!widget.enabled) return;
+
+    String displayText = msg.text.replaceAll('_', ' ');
+    final cleanText = msg.text.trim().toLowerCase().replaceAll('_', ' ');
+
+    if (msg.source == 'speech') {
+      if (cleanText == 'hello' || cleanText == 'habari') {
+        displayText = "👋\nHello\nHabari";
+      } else if (cleanText == 'yes' || cleanText == 'ndiyo') {
+        displayText = "👍\nYes\nNdiyo";
+      } else if (cleanText == 'no' || cleanText == 'hapana') {
+        displayText = "✋\nNo\nHapana";
+      } else if (cleanText == 'help' || cleanText == 'msaada') {
+        displayText = "🆘\nHelp\nMsaada";
+      } else if (cleanText == 'thank you' || cleanText == 'thank_you' || cleanText == 'asante') {
+        displayText = "🙏\nThank You\nAsante";
+      }
+    } else if (msg.source == 'gesture') {
+      if (cleanText == 'hello') {
+        displayText = "👋\nHello\nHabari";
+      } else if (cleanText == 'yes') {
+        displayText = "☝️\nYes\nNdiyo";
+      } else if (cleanText == 'no') {
+        displayText = "✌️\nNo\nHapana";
+      } else if (cleanText == 'help') {
+        displayText = "🤟\nHelp\nMsaada";
+      } else if (cleanText == 'thank you' || cleanText == 'thank_you') {
+        displayText = "🙏\nThank You\nAsante";
+      }
+    }
+
     setState(() {
-      _text = msg.text.replaceAll('_', ' ');
+      _text = displayText;
       _source = msg.source;
       _visible = true;
     });
     _animCtrl.forward();
 
     _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 3), () {
+    _hideTimer = Timer(const Duration(seconds: 5), () {
       _animCtrl.reverse().then((_) {
         if (mounted) setState(() => _visible = false);
       });

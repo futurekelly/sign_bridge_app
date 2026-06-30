@@ -68,6 +68,9 @@ class LandmarkProcessor {
     } else if (activeSimulationLabel == 'iloveyou') {
       thumbExt = indexExt = middleExt = ringExt = false;
       pinkyExt = true;
+    } else if (activeSimulationLabel == 'thank_you') {
+      thumbExt = false;
+      indexExt = middleExt = ringExt = pinkyExt = true;
     } else {
       // Idle animated curl
       thumbExt = true;

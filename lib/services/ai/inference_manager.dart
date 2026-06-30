@@ -364,12 +364,21 @@ class InferenceManager extends ChangeNotifier {
 
       _currentLandmarks = landmarks;
 
-      // 2. Deterministic rule-based gesture classification matching web counterpart
+      // 2. Normalize and run TensorFlow Lite model inference
       if (landmarks.isNotEmpty) {
-        final result = classifyGesture(landmarks);
-        if (result.label != 'unknown') {
-          _prediction = result.label;
-          stabilizer.processPrediction(result);
+        if (_processor.activeSimulationLabel == 'idle') {
+          _prediction = '';
+        } else {
+          final normalizedVector = normalizeLandmarks(landmarks);
+          if (normalizedVector.length == 42 && _isInitialized) {
+            final result = predict(normalizedVector);
+            debugPrint('[TFLite] Predicted: ${result.label}, confidence: ${(result.confidence * 100).toStringAsFixed(0)}%');
+
+            if (result.confidence >= 0.80 && result.label != 'unknown') {
+              _prediction = result.label;
+              stabilizer.processPrediction(result);
+            }
+          }
         }
       }
 

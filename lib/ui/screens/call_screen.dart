@@ -491,8 +491,16 @@ class _CallViewState extends State<_CallView> {
   }
 
   void _triggerSimulatedSign(CallController controller, String label) {
+    // 1. Update landmark shape for the visual hand skeleton overlay
     controller.inferenceManager.setSimulationLabel(label);
-    // Auto reset to idle waving animation after 4 seconds
+
+    // 2. Immediately fire the full pipeline:
+    //    TranslationController → CaptionOverlay + TTS + WebRTC DataChannel
+    //    This guarantees delivery even if the TFLite model confidence gate
+    //    doesn't reach the 3-frame threshold on simulated coordinates.
+    controller.translation.simulateLocalGesture(label);
+
+    // 3. Auto-reset landmark shape to idle waving after 4 seconds
     Timer(const Duration(seconds: 4), () {
       controller.inferenceManager.setSimulationLabel('idle');
     });

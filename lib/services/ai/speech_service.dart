@@ -21,8 +21,9 @@ class SpeechService {
 
   bool _initialized = false;
   bool _listening = false;
+  bool _wantRunning = false; // true while stop() hasn't been called
 
-  /// Locale: "en_US" by default. Pass "sw_KE" or similar for Swahili.
+  /// Locale: "en_US" by default. Pass "sw_TZ" for Swahili.
   String _locale = 'en_US';
   String get languageTag => _locale.split('_').first; // "en" / "sw"
 
@@ -40,6 +41,10 @@ class SpeechService {
         onError: (e) {
           debugPrint('[SpeechService] SpeechToText error callback: $e');
           _statusCtrl.add(AiStatus.error);
+          // Auto-restart after error if still wanted
+          if (_wantRunning) {
+            Future.delayed(const Duration(seconds: 1), _startListening);
+          }
         },
       );
     } catch (e) {
@@ -58,10 +63,14 @@ class SpeechService {
         return;
       }
     }
-    if (_listening) return;
+    _wantRunning = true;
+    await _startListening();
+  }
 
-    _statusCtrl.add(AiStatus.listening);
+  Future<void> _startListening() async {
+    if (!_wantRunning || _listening) return;
     _listening = true;
+    _statusCtrl.add(AiStatus.listening);
 
     try {
       await _stt.listen(
@@ -71,13 +80,16 @@ class SpeechService {
           partialResults: true,
         ),
         onResult: (result) {
-          // Only emit final results to avoid spamming UI/DataChannel.
-          if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {
+          final words = result.recognizedWords.trim();
+          if (words.isEmpty) return;
+
+          // Emit final results always; also emit partials ≥ 3 chars
+          // so short words (yes, no) are captured before auto-timeout.
+          if (result.finalResult || words.length >= 3) {
             _resultCtrl.add(TranslationMessage(
-              text: result.recognizedWords.trim(),
+              text: words,
               source: 'speech',
               language: languageTag,
-              // gifKey is set later by the GestureMapperService.
             ));
           }
         },
@@ -86,10 +98,15 @@ class SpeechService {
       debugPrint('[SpeechService] Error during listen: $e');
       _listening = false;
       _statusCtrl.add(AiStatus.error);
+      // Auto-restart after 1 second
+      if (_wantRunning) {
+        Future.delayed(const Duration(seconds: 1), _startListening);
+      }
     }
   }
 
   Future<void> stop() async {
+    _wantRunning = false;
     if (!_listening) return;
     _listening = false;
     await _stt.stop();
@@ -108,13 +125,18 @@ class SpeechService {
 
   void _onPluginStatus(String status) {
     // Plugin status strings: "listening" | "notListening" | "done"
+    debugPrint('[SpeechService] Plugin status: $status');
     if (status == 'listening') {
       _statusCtrl.add(AiStatus.listening);
     } else if (status == 'done' || status == 'notListening') {
-      // STT plugins sometimes auto-stop on silence.
-      // TranslationController will decide whether to restart.
-      _statusCtrl.add(AiStatus.idle);
+      // STT plugins auto-stop on silence on most Android devices.
+      // Auto-restart so the hearing user doesn't need to tap mic again.
       _listening = false;
+      _statusCtrl.add(AiStatus.idle);
+      if (_wantRunning) {
+        Future.delayed(const Duration(milliseconds: 500), _startListening);
+      }
     }
   }
 }
+

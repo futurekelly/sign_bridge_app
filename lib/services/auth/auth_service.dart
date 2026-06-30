@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/enums.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -200,7 +201,7 @@ class AuthService {
       _db.collection('users').doc(currentUser!.uid);
 
   /// Saves the user's display name and optional custom SignBridge ID.
-  Future<void> saveUserProfile(String displayName, {String? signBridgeId}) async {
+  Future<void> saveUserProfile(String displayName, {String? signBridgeId, UserRole? role}) async {
     if (currentUser == null) return;
 
     // Update Firebase Auth's displayName if missing
@@ -211,10 +212,12 @@ class AuthService {
 
     final existing = await getUserProfile();
     final String? activeId = existing?['signBridgeId'] as String? ?? signBridgeId;
+    final String? activeRole = existing?['role'] as String? ?? role?.value;
 
     await _userDoc.set({
       'displayName': displayName,
       'signBridgeId': activeId,
+      'role': activeRole,
       'uid': currentUser!.uid,
       'status': existing?['status'] ?? 'idle',
       'createdAt': existing?['createdAt'] ?? FieldValue.serverTimestamp(),
@@ -250,6 +253,8 @@ class AuthService {
         profile['displayName'] != null &&
         profile['displayName'].toString().trim().isNotEmpty &&
         profile['signBridgeId'] != null &&
-        profile['signBridgeId'].toString().trim().isNotEmpty;
+        profile['signBridgeId'].toString().trim().isNotEmpty &&
+        profile['role'] != null &&
+        profile['role'].toString().trim().isNotEmpty;
   }
 }

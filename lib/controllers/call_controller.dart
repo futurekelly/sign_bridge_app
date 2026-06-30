@@ -92,8 +92,8 @@ class CallController extends ChangeNotifier {
         .listen((snap) {
       if (!snap.exists) {
         if (_state == CallState.inCall || _state == CallState.connecting) {
-          debugPrint('[CallController] Call doc /calls/$callId deleted. Transitioning to CallState.ended.');
-          _setState(CallState.ended);
+          debugPrint('[CallController] Call doc /calls/$callId deleted. Ending call.');
+          endCall();
         }
       } else {
         final data = snap.data();
@@ -102,8 +102,8 @@ class CallController extends ChangeNotifier {
           debugPrint('[CallController] Call doc status update: $status');
           if (status == 'ended' || status == 'rejected' || status == 'caller_cancelled') {
             if (_state == CallState.inCall || _state == CallState.connecting) {
-              debugPrint('[CallController] Call document status is $status. Transitioning to CallState.ended.');
-              _setState(CallState.ended);
+              debugPrint('[CallController] Call document status is $status. Ending call.');
+              endCall();
             }
           }
         }

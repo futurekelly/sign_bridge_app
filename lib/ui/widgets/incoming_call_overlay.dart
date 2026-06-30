@@ -1,9 +1,12 @@
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/routes.dart';
 import '../../core/theme.dart';
 import '../../core/spacing.dart';
 import '../../services/accessibility/vibration_service.dart';
+import '../../controllers/accessibility_controller.dart';
 
 class IncomingCallOverlay {
   static OverlayEntry? _entry;
@@ -72,11 +75,18 @@ class _IncomingCallOverlayWidgetState extends State<_IncomingCallOverlayWidget>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
+  bool _showFlash = false;
+  Timer? _flashTimer;
+
   @override
   void initState() {
     super.initState();
-    // Trigger deaf vibration alert pattern on startup
-    VibrationService.instance.startIncomingCallVibration();
+    
+    final a11y = context.read<AccessibilityController>();
+    if (a11y.vibrationEnabled) {
+      VibrationService.instance.startIncomingCallVibration();
+    }
+    _startFlashlightAlerts(a11y);
 
     _pulseController = AnimationController(
       vsync: this,
@@ -88,10 +98,24 @@ class _IncomingCallOverlayWidgetState extends State<_IncomingCallOverlayWidget>
     );
   }
 
+  void _startFlashlightAlerts(AccessibilityController a11y) {
+    if (!a11y.flashlightEnabled) return;
+    _flashTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
+      if (mounted) {
+        setState(() => _showFlash = true);
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            setState(() => _showFlash = false);
+          }
+        });
+      }
+    });
+  }
+
   @override
   void dispose() {
-    // Ensure vibration loops are immediately cut off when screen closes
     VibrationService.instance.stopVibration();
+    _flashTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
@@ -101,13 +125,15 @@ class _IncomingCallOverlayWidgetState extends State<_IncomingCallOverlayWidget>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Material(
-      color: Colors.black.withValues(alpha: 0.6),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: SafeArea(
-          child: Center(
-            child: Padding(
+    return Stack(
+      children: [
+        Material(
+          color: Colors.black.withValues(alpha: 0.6),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: SafeArea(
+              child: Center(
+                child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: AnimatedBuilder(
                 animation: _pulseAnimation,
@@ -225,6 +251,16 @@ class _IncomingCallOverlayWidgetState extends State<_IncomingCallOverlayWidget>
           ),
         ),
       ),
+    ),
+        if (_showFlash)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                color: Colors.white.withValues(alpha: 0.85),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

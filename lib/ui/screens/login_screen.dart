@@ -63,11 +63,29 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final hasProfile = await _auth.hasProfile();
       if (mounted) {
         if (hasProfile) {
-          Navigator.pushReplacementNamed(context, AppRoutes.home);
+          await _syncRoleAndGoHome();
         } else {
           Navigator.pushReplacementNamed(context, AppRoutes.profileSetup);
         }
       }
+    }
+  }
+
+  Future<void> _syncRoleAndGoHome() async {
+    try {
+      final profile = await _auth.getUserProfile();
+      if (profile != null && profile['role'] != null) {
+        final roleStr = profile['role'] as String;
+        final role = UserRoleX.fromString(roleStr);
+        if (mounted) {
+          await context.read<AccessibilityController>().setRole(role);
+        }
+      }
+    } catch (e) {
+      debugPrint('[LoginScreen] Failed to sync role: $e');
+    }
+    if (mounted) {
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
     }
   }
 
@@ -118,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final hasProfile = await _auth.hasProfile();
       if (mounted) {
         if (hasProfile) {
-          Navigator.pushReplacementNamed(context, AppRoutes.home);
+          await _syncRoleAndGoHome();
         } else {
           Navigator.pushReplacementNamed(context, AppRoutes.profileSetup);
         }
@@ -143,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         final hasProfile = await _auth.hasProfile();
         if (mounted) {
           if (hasProfile) {
-            Navigator.pushReplacementNamed(context, AppRoutes.home);
+            await _syncRoleAndGoHome();
           } else {
             Navigator.pushReplacementNamed(context, AppRoutes.profileSetup);
           }
@@ -164,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final hasProfile = await _auth.hasProfile();
       if (mounted) {
         if (hasProfile) {
-          Navigator.pushReplacementNamed(context, AppRoutes.home);
+          await _syncRoleAndGoHome();
         } else {
           Navigator.pushReplacementNamed(context, AppRoutes.profileSetup);
         }

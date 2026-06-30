@@ -55,7 +55,7 @@ class AccessibilityController extends ChangeNotifier {
       _captionFontSize = 18.0;
       _vibrationEnabled = true;
       _flashlightEnabled = true;
-      _ttsEnabled = false; // Deaf user signing, TTS voice typically not needed locally
+      _ttsEnabled = true; // Keep TTS voice enabled by default for presentation
     } else if (role == UserRole.hearing) {
       _captionsEnabled = false;
       _visualNotifications = false;

@@ -11,6 +11,7 @@ import '../../controllers/translation_controller.dart';
 import '../../core/enums.dart';
 import '../../services/ai/inference_manager.dart';
 import '../../services/ai/landmark_processor.dart';
+import '../../data/models/translation_message.dart';
 
 import '../../core/theme.dart';
 import '../../core/spacing.dart';
@@ -56,6 +57,39 @@ class _CallView extends StatefulWidget {
 class _CallViewState extends State<_CallView> {
   bool _isEnding = false;
   bool _showDebugPanel = false;
+
+  StreamSubscription? _liveMessageSub;
+  bool _showFlash = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_liveMessageSub == null) {
+      final controller = Provider.of<CallController>(context, listen: false);
+      _liveMessageSub = controller.translation.liveResultStream.listen(_onIncomingMessage);
+    }
+  }
+
+  void _onIncomingMessage(TranslationMessage msg) {
+    final a11y = Provider.of<AccessibilityController>(context, listen: false);
+    if (a11y.vibrationEnabled) {
+      HapticFeedback.vibrate();
+    }
+    if (a11y.flashlightEnabled) {
+      setState(() => _showFlash = true);
+      Future.delayed(const Duration(milliseconds: 80), () {
+        if (mounted) {
+          setState(() => _showFlash = false);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _liveMessageSub?.cancel();
+    super.dispose();
+  }
 
   Future<void> _handleEndCall(CallController controller) async {
     if (_isEnding) return;
@@ -360,6 +394,16 @@ class _CallViewState extends State<_CallView> {
               enabled: a11y.captionsEnabled,
             ),
 
+            // Visual Flashlight Overlay (Strobe Flash Alert for Deaf Users)
+            if (_showFlash)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+
             // Visible toolbar removed for a clean, hands-free camera prediction feel.
             // Under-the-hood gestures are triggered via tapping Local Preview/Remote View.
 
@@ -499,17 +543,16 @@ class _LocalPreview extends StatelessWidget {
             child: RTCVideoView(renderer, mirror: true,
                 objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
           ),
-          if (showDebug)
-            Positioned.fill(
-              child: ListenableBuilder(
-                listenable: inference,
-                builder: (context, _) {
-                  return CustomPaint(
-                    painter: HandLandmarksPainter(landmarks: inference.currentLandmarks),
-                  );
-                },
-              ),
+          Positioned.fill(
+            child: ListenableBuilder(
+              listenable: inference,
+              builder: (context, _) {
+                return CustomPaint(
+                  painter: HandLandmarksPainter(landmarks: inference.currentLandmarks),
+                );
+              },
             ),
+          ),
         ],
       ),
     );

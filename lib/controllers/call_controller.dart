@@ -235,10 +235,10 @@ class CallController extends ChangeNotifier {
             _setState(CallState.inCall);
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
-            _fail('WebRTC Connection disconnected');
+            debugPrint('[CallController] WebRTC connection disconnected (transition state)');
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
-            _fail('WebRTC Connection failed');
+            debugPrint('[CallController] WebRTC connection failed (waiting for auto-recovery)');
             break;
           default:
             break;

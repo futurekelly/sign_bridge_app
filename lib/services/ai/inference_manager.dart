@@ -207,9 +207,8 @@ class InferenceManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Live deterministic rule-based gesture classification matching the web version
   PredictionResult classifyGesture(List<HandLandmark> landmarks) {
-    if (landmarks.isEmpty) {
+    if (landmarks.isEmpty || _processor.activeSimulationLabel == 'idle') {
       return const PredictionResult(index: 0, label: 'unknown', confidence: 0.0);
     }
 

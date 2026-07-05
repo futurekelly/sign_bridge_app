@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'inference_manager.dart';
 
@@ -13,10 +13,10 @@ class PredictionStabilizer {
   final StreamController<void> _endCtrl = StreamController<void>.broadcast();
   Stream<void> get gestureEndStream => _endCtrl.stream;
 
-  static const int      requiredConsecutiveFrames = 3;
-  static const double   minConfidenceThreshold    = 0.75;
-  static const Duration cooldownDuration          = Duration(seconds: 2);
-  static const Duration gestureEndTimeout         = Duration(milliseconds: 700);
+  static const int      requiredConsecutiveFrames = 2;    // was 3 — faster trigger
+  static const double   minConfidenceThreshold    = 0.65; // was 0.75 — fewer resets
+  static const Duration cooldownDuration          = Duration(milliseconds: 1500); // was 2s
+  static const Duration gestureEndTimeout         = Duration(milliseconds: 500);  // was 700ms
 
   String?   _candidateLabel;
   int       _candidateCount   = 0;

@@ -87,7 +87,12 @@ class HandLandmarkerHelper private constructor(private val context: Context) {
     fun detectFrame(frame: VideoFrame) {
         val landmarker = handLandmarker ?: return
         val frameNum = frameCounter.incrementAndGet()
-        
+
+        // Process every 2nd frame: ~15fps throughput at 30fps input.
+        // This halves YUV decode cost and prevents the detection queue from backing up,
+        // while still being faster than human reaction time (~100ms per gesture).
+        if (frameNum % 2 != 0L) return
+
         try {
             val i420 = frame.buffer.toI420() ?: return
             val width = i420.width

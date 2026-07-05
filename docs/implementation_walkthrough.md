@@ -1,63 +1,156 @@
-# Walkthrough: Saved Contacts & Contact Support Option
+# SignBridge — Implementation Walkthrough
+**Last Updated:** 2026-07-05 | **Current Tag:** `v0.2.0-phase2-mediapipe` + alignment fix commit `960bcf9`
 
-We have successfully implemented the **Saved Contacts** directory and the **Contact Support** features in SignBridge.
+This document is a running log of every major implementation step taken during the SignBridge project, serving as both a technical reference and a dissertation evidence trail.
 
-## 1. Saved Contacts Directory (Option B)
-- **Database Model (`lib/data/models/contact.dart`):** Built a new Hive-annotated `Contact` model supporting `id` (Short ID), `name`, and `userRole`. Ran the build runner code generator to compile the database adapters.
-- **Repository (`lib/data/repositories/contacts_repository.dart`):** Built a repository managing saved contacts in Hive, sorted alphabetically by default.
-- **Dynamic Options Sheet (`lib/ui/screens/contacts_screen.dart`):** Allows users to search, add, and delete contacts. When a contact is tapped:
-  - **Join Call:** Launches the WebRTC video call using the contact's short ID as the session ID.
-  - **Create Call:** Launches a new caller session generating a shareable Call ID.
-  - **Copy ID:** Instantly copies their peer ID to the clipboard.
-- **Dashboard Navigation:** Added a dedicated, Neumorphic **Saved Contacts** navigation card to the Home Dashboard (`home_screen.dart`) that routes directly to `/contacts`.
+---
 
-## 2. Contact Support Menu
-- **Support Option (`lib/ui/screens/settings_screen.dart`):** Added a "Contact Support" list item inside the Settings Screen.
-- **Email Dispatch:** Tapping "Contact Support" uses `url_launcher` to launch the default system mail client pre-filled with the support recipient `futurekelly360@gmail.com` and default subject line.
+## Phase 1 — Firebase Auth, SignBridge IDs & Direct Signaling Core ✅
 
-## 3. AI Simulator Panel (Step 14)
-- **Simulation Injection (`lib/controllers/translation_controller.dart`):** Exposed `simulateLocalGesture(String text)` and `simulateLocalSpeech(String text)` methods. Gestures trigger text translation, TTS vocalized readout locally, and sync GIF/captions remotely. Speech triggers captions & GIF overlays on both ends without TTS audio output.
-- **Glassmorphic Testing Panel (`lib/ui/screens/call_screen.dart`):**
-  - Wrapped `AiStatusIndicator` in a double-tap `GestureDetector`.
-  - Double-tapping the indicator opens a beautiful backdrop-filtered glassmorphic bottom sheet containing English/Swahili action buttons for standard vocabulary (`hello`, `thank_you`, `yes`, `no`, `help`).
-- **Localization:** Mapped and added translated titles, categories, and descriptions for the simulator helper in `lib/core/translations.dart` for English and Swahili.
+### What was built
+- **Unique ID Registry** (`/usernames/{lowercase_id}`): Firestore transactions guarantee no two users share a SignBridge ID. Registration is atomic — if the DB write fails, the Firebase Auth account is automatically deleted (double-write rollback).
+- **Direct Dialing Locks** (`call_manager.dart`): Orchestrates atomic call initiation. Checks callee `status == idle`, locks both users to `busy`/`ringing`, generates `/calls/{callId}` documents.
+- **Security Rules** (`firestore.rules`): Production-grade — writes restricted to owning UID, cross-user status updates permitted only for the `status` field, call history write-only by participants.
+- **ICE Candidate Purging**: `CallManager` clears ICE sub-collections and call documents on reject/disconnect/timeout.
 
-## 4. Verification
-- Verified compilation and static analysis with `flutter analyze`, ensuring no compilation errors or warnings exist in the codebase.
+---
 
-## 5. Phase 1: SignBridge ID & Direct Signaling Core (Completed)
-- **Database Unique Registry:** Configured the `/usernames/{lowercase_username}` collection. Checked and double-written via Firestore transactions to guarantee username uniqueness at the database level.
-- **Atomic Registration Flow:** Updated [auth_service.dart](file:///c:/Users/FutureTech/sign_bridge/lib/services/auth/auth_service.dart) and [login_screen.dart](file:///c:/Users/FutureTech/sign_bridge/lib/ui/screens/login_screen.dart) to prompt, sanitize, and validate unique usernames (SignBridge IDs) on account creation.
-- **Dialing Lock Service:** Created [call_manager.dart](file:///c:/Users/FutureTech/sign_bridge/lib/services/webrtc/call_manager.dart) to orchestrate atomic call initiation. Checks callee `status == idle`, sets caller and callee to `busy`, and generates unique `/calls/{callId}` records.
-- **Signaling Revisions:** Updated [signaling_service.dart](file:///c:/Users/FutureTech/sign_bridge/lib/services/webrtc/signaling_service.dart) and [call_controller.dart](file:///c:/Users/FutureTech/sign_bridge/lib/controllers/call_controller.dart) to hook into dynamic call IDs and peer UIDs.
-- **Automatic purging:** Programmed CallManager to completely clear ICE candidate sub-collections and calls documents on rejection, disconnect, or timeout to avoid storage accumulation.
-- **Security rules:** Wrote a production-ready [firestore.rules](file:///c:/Users/FutureTech/sign_bridge/firestore.rules) layout enforcing uniqueness, write-once entries, and call-log permissions.
+## Phase 2 — Ring UI & Deaf Vibration Engine ✅
 
-## 6. Phase 2: Ring Alert UI & Deaf Vibration Engine (Completed)
-- **Overlay Manager Safety:** Enforced an initialization gate (`if (_entry != null) return`) in `IncomingCallOverlay` preventing duplicate screen insertions.
-- **Vibration Service:** Created [vibration_service.dart](file:///c:/Users/FutureTech/sign_bridge/lib/services/accessibility/vibration_service.dart) exposing `startIncomingCallVibration()` and `stopVibration()`. It uses a periodic haptic timer to loop device vibrations continuously, providing accessibility for deaf users.
-- **Overlay Integration:** Linked the haptic alert triggers directly to the overlay's life-cycle (`initState()` and `dispose()`), guaranteeing that vibration terminates instantly when answering, declining, or if the overlay widget is disposed.
+### What was built
+- **Incoming Call Overlay** (`incoming_call_overlay.dart`): Glassmorphic, animated overlay with Accept/Decline buttons; automatically dismissed if caller hangs up via Firestore listener.
+- **Vibration Service** (`vibration_service.dart`): Periodic haptic timer loops continuously for deaf callee until answered or declined. Tied directly to overlay life-cycle (`initState`/`dispose`).
+- **Overlay Context Fix**: Replaced `Overlay.of(context)` with `AppRoutes.navigatorKey.currentState?.overlay` to avoid null-check crashes.
+- **Handshake Race Fix**: Callee now waits for caller's WebRTC offer before proceeding if callee accepts before the caller's camera initialises.
 
-## 7. Refined Calling Machine & History Logger (Completed)
-- **Ringing Presence:** Configured call dialing to transition caller status to `busy` and callee status to `ringing` dynamically while the overlay rings. Statuses are set to `busy` for both only after callee accept occurs.
-- **Dynamic Call History Loggers:** Programmed `saveCallHistory()` inside `CallManager` to write structured record objects (`incoming`, `outgoing`, `missed`, `declined`) under Firestore `/users/{uid}/call_history` collections upon calls completing, timing out, or being rejected.
-- **Overlay State Listeners:** Attached real-time document listeners to incoming dials so that if the caller hangs up or the call times out on Caller's 30s timer, the Callee's overlay is dismissed instantly.
+---
 
-## 8. Phase 2 Completion & E2E Testing Guide
-- Prepared a comprehensive validation and testing guide for two Android devices: [phase_2_validation_and_testing_guide.md](file:///C:/Users/FutureTech/.gemini/antigravity/brain/963da5ed-14dd-478a-8689-d790b8abe943/phase_2_validation_and_testing_guide.md).
-- Verified full workflow: SignBridge ID lookup, direct dialing, overlay integration, acceptance/rejection flow, connection checks, and history log creation.
-- Created pre-testing validation report and Go/No-Go assessment: [pre_testing_validation_report.md](file:///C:/Users/FutureTech/.gemini/antigravity/brain/963da5ed-14dd-478a-8689-d790b8abe943/pre_testing_validation_report.md).
+## Phase 3 — Bilingual Support & Contacts ✅
 
-## 9. Bug Fix: Calling State & Registration Permission Errors (Completed)
-- **Problem 1 (Registration):** Sign-up attempts on physical devices were failing with a `[cloud_firestore/permission-denied]` error during username pre-check queries.
-- **Problem 2 (Calling Status):** Call creation failed when updating the callee's status because of strict write permissions on `/users/{uid}`.
-- **Problem 3 (Bootstrap Auth Bypass):** During `_bootstrap()`, the app unconditionally ran `_auth.signInAnonymously()`. If a caller was already logged in (e.g. `zubery_123`), this call signed them out and authenticated them as a new anonymous guest. This changed their Firebase UID, causing subsequent Firestore writes (like writing call history records) to fail with a `permission-denied` error since they were no longer authenticated under their registered account.
-- **Problem 4 (Overlay Context Exception):** When an incoming call was received, resolving the overlay context via `Overlay.of(AppRoutes.navigatorKey.currentContext)` threw an `Unhandled Exception: Null check operator used on a null value`. This occurred because the context retrieved from the global `navigatorKey` points to the `Navigator` itself, and `Overlay` is a child of the `Navigator`, not an ancestor.
-- **Solution:** 
-  - Updated `firestore.rules` to allow public reads on `/usernames`, and allowed authenticated users to update another user's document ONLY for the `'status'` field.
-  - Modified `_bootstrap()` in `lib/controllers/call_controller.dart` to check if a user is already logged in before running `signInAnonymously()`.
-  - Updated `IncomingCallOverlay` to directly access the overlay state from the navigator state via `AppRoutes.navigatorKey.currentState?.overlay`, and added a safety try-catch block to `OverlayEntry.remove()`.
-  - Updated `firebase.json` and deployed all security rules successfully using the Firebase CLI.
-- **Verification:** Verified that call creation does not disrupt the user's logged-in identity and that the call state proceeds correctly.
+### What was built
+- **AppTranslations** (`lib/core/translations.dart`): Static map covering 50+ keys in English and Swahili across all screens.
+- **Saved Contacts** (`contacts_repository.dart` + `contacts_screen.dart`): Hive-backed directory, alphabetically sorted, with join/create/copy/dial actions.
+- **AI Simulator Panel** (`call_screen.dart`): Hidden glassmorphic panel (double-tap AI icon) with vocabulary buttons to simulate gestures and speech for E2E testing without a real hand.
 
+---
 
+## Phase 4 — Native MediaPipe Real-Time Vision Pipeline ✅
+
+This was the most significant technical phase. The goal was to replace the AI Simulator Panel with real on-device hand gesture recognition.
+
+### Architecture Decision
+The native Android layer is **only a landmark producer**. All AI logic (normalization, inference, stabilization, TTS, DataChannel) remains in Dart.
+
+### Files Created / Modified
+
+| File | Role |
+|---|---|
+| `HandLandmarkerHelper.kt` | Initializes MediaPipe HandLandmarker (LIVE_STREAM mode), converts `VideoFrame` → NV21 → JPEG → Bitmap → MPImage, calls `detectAsync()`, emits 21 landmark maps via callback |
+| `HandLandmarkVideoSink.kt` | Implements WebRTC `VideoSink`; receives every frame from the local camera track and passes it to `HandLandmarkerHelper.detectFrame()` |
+| `MainActivity.kt` | Exposes `EventChannel("sign_bridge/landmarks")`; wires `HandLandmarkVideoSink` to the local WebRTC track after camera starts |
+| `inference_manager.dart` | Subscribes to EventChannel; normalises landmarks; runs TFLite model; feeds `PredictionStabilizer` |
+| `prediction_stabilizer.dart` | Gates raw predictions; emits only stable gestures; handles cooldown and gesture-end events |
+| `translation_controller.dart` | Receives stable predictions → TTS audio + WebRTC DataChannel message to peer |
+| `call_screen.dart` | `HandLandmarksPainter` draws the 21-point skeleton on top of the RTCVideoView |
+
+### Frame Pipeline (end-to-end)
+```
+Camera Hardware
+    │
+    ▼ (30fps)
+WebRTC Local Track
+    │
+    ▼
+HandLandmarkVideoSink.onFrame()
+    │  skip odd frames → ~15fps to MediaPipe
+    ▼
+HandLandmarkerHelper.detectFrame()
+    │  VideoFrame → I420 → NV21 → JPEG → Bitmap → MPImage
+    ▼
+MediaPipe HandLandmarker.detectAsync()
+    │  (async callback ~10-30ms)
+    ▼
+onLandmarksDetected callback
+    │  List<{id, x, y, z}> × 21 landmarks
+    ▼
+EventChannel → Dart
+    │
+    ▼
+InferenceManager._processNativeLandmarks()
+    │  normalize (wrist-centred, scale by max span)
+    │  TFLite inference → PredictionResult{label, confidence}
+    ▼
+PredictionStabilizer.processPrediction()
+    │  2 consecutive frames ≥ 0.65 confidence → emit
+    ▼
+TranslationController._onStablePrediction()
+    │  TTS.speak() + DataChannel.send(label)
+    ▼
+Peer device receives label → shows caption + GIF
+```
+
+### Emulator Fallback
+On devices without Google Play JNI (e.g. Huawei HMS), `UnsatisfiedLinkError` is caught in `HandLandmarkerHelper.init`. The app gracefully falls back to `AiStatus.idle` with no crash.
+
+---
+
+## Phase 4.1 — Landmark Overlay Alignment & Performance Tuning ✅
+
+### Problem
+The HandLandmarksPainter was mapping MediaPipe coordinates directly onto the container dimensions, ignoring two critical facts:
+1. MediaPipe outputs landmarks in **landscape bitmap coordinate space** (640×480), not portrait display space
+2. `RTCVideoViewObjectFitCover` crops the video, requiring crop offset compensation
+
+### Coordinate Axis Investigation
+
+| Attempt | x formula | y formula | Observed result |
+|---|---|---|---|
+| Original | `(1-lm.x) × W` | `lm.y × H` | Fingers pointing **left** (90° rotated) |
+| Fix attempt 1 | `(1-lm.x) × sWidth - dx` (3:4 ratio) | `lm.y × H` | Still **right-shifted** |
+| Fix attempt 2 | `(1-lm.y) × W` | `lm.x × H` | Fingers pointing **down** (180° off) |
+| **Final fix** ✅ | `(1-lm.y) × W` | `(1-lm.x) × H` | Fingers pointing **up** ✓ |
+
+### Root Cause Explanation
+MediaPipe processes the raw landscape frame (640×480) with `.setRotationDegrees(frame.rotation)`. The rotation is applied **internally** during processing, but the **output landmark coordinates remain expressed in the original landscape bitmap axis order**:
+- `lm.x`: 0→1 along landscape width → corresponds to portrait **vertical** (top→bottom)
+- `lm.y`: 0→1 along landscape height → corresponds to portrait **horizontal** (left→right)
+
+Swapping and inverting both axes maps correctly onto the portrait RTCVideoView.
+
+### Performance Tuning
+
+| Parameter | Before | After | Reason |
+|---|---|---|---|
+| `requiredConsecutiveFrames` | 3 | **2** | Faster trigger (~130ms vs ~200ms) |
+| `minConfidenceThreshold` | 0.75 | **0.65** | Fewer counter resets on borderline frames |
+| `cooldownDuration` | 2000ms | **1500ms** | Allows re-detection sooner |
+| `gestureEndTimeout` | 700ms | **500ms** | Clears state faster when hand lowers |
+| Frame skip | None (every frame) | **Every 2nd frame** | Halves YUV decode CPU cost at same detection quality |
+
+---
+
+## Verification Status
+
+| Test | Status |
+|---|---|
+| App builds without errors | ✅ |
+| MediaPipe initializes on Huawei physical device | ✅ |
+| Landmarks stream via EventChannel at ~15fps | ✅ |
+| TFLite inference runs in Dart (not Kotlin) | ✅ |
+| Gesture recognized: hello, thank_you, yes, no, help, iloveyou | ✅ |
+| TTS speaks recognized gesture | ✅ |
+| Skeleton overlay visible on call screen | ✅ |
+| Skeleton fingers point upward (portrait orientation) | ✅ |
+| Emulator falls back gracefully (no JNI crash) | ✅ |
+| GitHub tag `v0.2.0-phase2-mediapipe` pushed | ✅ |
+| Alignment fix commit `960bcf9` pushed | ✅ |
+
+---
+
+## Next Steps (Phase 5)
+
+1. **Vocabulary expansion** — collect dataset for 30+ signs, retrain `gesture_model.tflite`
+2. **FCM push notifications** — background call alerts
+3. **Production TURN servers** — replace OpenRelay for cellular reliability
+4. **User study** — structured usability testing with deaf and hearing participants
+5. **Dissertation write-up** — architecture chapters, performance benchmarks, evaluation

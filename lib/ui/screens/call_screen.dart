@@ -757,10 +757,19 @@ class HandLandmarksPainter extends CustomPainter {
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
-    final points = landmarks.map((lm) {
-      // Mirror the x-coordinate to match the mirrored local preview
-      final x = (1.0 - lm.x) * size.width;
-      final y = lm.y * size.height;
+    // MediaPipe receives the raw landscape bitmap (640×480) and rotates it internally
+    // using frame.rotation (typically 90° for front-camera portrait).
+    // The output coordinates are still in the landscape bitmap's axis order:
+    //   lm.x: 0→1 along the landscape width  → maps to the portrait VERTICAL axis (top→bottom)
+    //   lm.y: 0→1 along the landscape height → maps to the portrait HORIZONTAL axis (left→right)
+    //
+    // To display correctly on the portrait preview we must swap and mirror the axes:
+    //   screen_x = (1.0 - lm.y) * containerWidth    (landscape y, mirrored for front camera)
+    //   screen_y = lm.x * containerHeight            (landscape x maps to portrait vertical)
+
+    final List<Offset> points = landmarks.map((lm) {
+      final x = (1.0 - lm.y) * size.width;
+      final y = (1.0 - lm.x) * size.height; // inverted: wrist → bottom, fingertips → top
       return Offset(x, y);
     }).toList();
 

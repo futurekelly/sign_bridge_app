@@ -66,13 +66,13 @@ class InferenceManager extends ChangeNotifier {
   String _prediction = '';
   String get prediction => _prediction;
 
-  Timer? _loopTimer;
+  static const EventChannel _channel = EventChannel('com.example.sign_bridge/landmarks');
+  StreamSubscription? _landmarkSub;
+
   dynamic _track;
 
   int _frameCount = 0;
   DateTime? _fpsStartTime;
-  bool _isCapturing = false;
-  Uint8List? _cachedFrameBytes;
 
   /// Normalizes 21 2D hand landmarks matching the Python dataset recording logic.
   /// Performs wrist translation (landmark 0) and max-distance scaling to output 42 floats.
@@ -212,58 +212,44 @@ class InferenceManager extends ChangeNotifier {
       return const PredictionResult(index: 0, label: 'unknown', confidence: 0.0);
     }
 
-    double dist(HandLandmark a, HandLandmark b) {
-      return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
-    }
+    double dist(HandLandmark a, HandLandmark b) =>
+        sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
 
-    final wrist = landmarks[0];
+    final wrist    = landmarks[0];
+    final thumbTip = landmarks[4]; // thumb tip
 
-    // Thumb TIP (4) vs IP joint (2) and MCP (3)
-    final thumbTip = landmarks[4];
-    final thumbJoint2 = landmarks[2];
-    final thumbJoint3 = landmarks[3];
-    bool thumbExtended = dist(thumbTip, thumbJoint2) > dist(thumbJoint3, thumbJoint2) * 1.1;
+    // ── Extension detection ──────────────────────────────────
+    // Thumb extended: tip far from IP joint (idx 2)
+    final thumbExtended  = dist(thumbTip, landmarks[2]) > dist(landmarks[3], landmarks[2]) * 1.1;
+    final indexExtended  = dist(landmarks[8],  wrist) > dist(landmarks[6],  wrist) * 1.05;
+    final middleExtended = dist(landmarks[12], wrist) > dist(landmarks[10], wrist) * 1.05;
+    final ringExtended   = dist(landmarks[16], wrist) > dist(landmarks[14], wrist) * 1.05;
+    final pinkyExtended  = dist(landmarks[20], wrist) > dist(landmarks[18], wrist) * 1.05;
 
-    // Index TIP (8) vs PIP joint (6)
-    bool indexExtended = dist(landmarks[8], wrist) > dist(landmarks[6], wrist) * 1.05;
+    // ── Thumb direction (used for yes vs no) ─────────────────
+    // y=0 is screen top; lower y = higher on screen = pointing up.
+    final thumbPointingUp   = thumbTip.y < wrist.y - 0.04;
+    final thumbPointingDown = thumbTip.y > wrist.y + 0.04;
 
-    // Middle TIP (12) vs PIP joint (10)
-    bool middleExtended = dist(landmarks[12], wrist) > dist(landmarks[10], wrist) * 1.05;
-
-    // Ring TIP (16) vs PIP joint (14)
-    bool ringExtended = dist(landmarks[16], wrist) > dist(landmarks[14], wrist) * 1.05;
-
-    // Pinky TIP (20) vs PIP joint (18)
-    bool pinkyExtended = dist(landmarks[20], wrist) > dist(landmarks[18], wrist) * 1.05;
-
-    // Determine TSL gesture label matching the student's counterpart rules
+    // ── Classification (matches new LandmarkProcessor shapes) ─
+    //   hello     → all 5 extended
+    //   yes       → thumb only, tip above wrist (👍 thumb up)
+    //   no        → thumb only, tip below wrist (👎 thumb down)
+    //   thank_you → index + middle (✌️ peace sign)
+    //   help      → all curled fist
     String label = 'unknown';
-    int index = 0;
+    int    index = 0;
 
     if (thumbExtended && indexExtended && middleExtended && ringExtended && pinkyExtended) {
-      label = 'hello';
-      index = 1;
-    } else if (!thumbExtended && indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
-      label = 'yes';
-      index = 2;
+      label = 'hello';     index = 0;
+    } else if (thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended && thumbPointingUp) {
+      label = 'yes';       index = 1;
+    } else if (thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended && thumbPointingDown) {
+      label = 'no';        index = 2;
     } else if (!thumbExtended && indexExtended && middleExtended && !ringExtended && !pinkyExtended) {
-      label = 'no';
-      index = 3;
-    } else if (!thumbExtended && indexExtended && middleExtended && ringExtended && !pinkyExtended) {
-      label = 'help';
-      index = 4;
-    } else if (!thumbExtended && indexExtended && middleExtended && ringExtended && pinkyExtended) {
-      label = 'water';
-      index = 5;
-    } else if (thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
-      label = 'good';
-      index = 6;
+      label = 'thank_you'; index = 3;
     } else if (!thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
-      label = 'stop';
-      index = 7;
-    } else if (!thumbExtended && !indexExtended && !middleExtended && !ringExtended && pinkyExtended) {
-      label = 'iloveyou';
-      index = 8;
+      label = 'help';      index = 4;
     }
 
     return PredictionResult(
@@ -284,7 +270,7 @@ class InferenceManager extends ChangeNotifier {
     return result;
   }
 
-  /// Optional loop start hook for UI overlay compatibility.
+  /// Start native MediaPipe landmark subscription.
   void start([dynamic track]) {
     if (track == null && _track == null) {
       debugPrint('[InferenceManager] Aborting start: Local video track is null.');
@@ -298,55 +284,34 @@ class InferenceManager extends ChangeNotifier {
     _landmarkLatency = 0;
     _inferenceLatency = 0;
     _imageSizeKb = 0;
-    _isCapturing = false;
-    _cachedFrameBytes = null;
 
-    _loopTimer?.cancel();
-    _loopTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      _captureAndProcessFrame();
+    _landmarkSub?.cancel();
+    _landmarkSub = _channel.receiveBroadcastStream().listen((data) {
+      _processNativeLandmarks(data);
+    }, onError: (e) {
+      debugPrint('[InferenceManager] Landmark stream error: $e');
     });
-    debugPrint('[InferenceManager] AI Pipeline loop started (100ms loop).');
+    debugPrint('[InferenceManager] Native landmark EventChannel stream started.');
     notifyListeners();
   }
 
-  /// Stops the frame loop and resets states.
+  /// Stops the landmark subscription and resets states.
   void stop() {
-    _loopTimer?.cancel();
-    _loopTimer = null;
+    _landmarkSub?.cancel();
+    _landmarkSub = null;
     _isProcessing = false;
     _currentLandmarks = [];
     _prediction = '';
-    _cachedFrameBytes = null;
-    _isCapturing = false;
     stabilizer.reset();
-    debugPrint('[InferenceManager] AI Pipeline loop stopped.');
+    debugPrint('[InferenceManager] Native landmark EventChannel stream stopped.');
     notifyListeners();
   }
 
-  Future<void> _captureAndProcessFrame() async {
+  void _processNativeLandmarks(dynamic data) {
     if (!_isProcessing) return;
 
     try {
       _frameCount++;
-
-      if (_track != null && !_isCapturing && (_frameCount % 20 == 0 || _cachedFrameBytes == null)) {
-        _isCapturing = true;
-        try {
-          final dynamic frameBuffer = await _track.captureFrame();
-          final bytes = (frameBuffer as dynamic).asUint8List() as Uint8List;
-          if (bytes.isNotEmpty) {
-            _cachedFrameBytes = bytes;
-            _imageSizeKb = bytes.length ~/ 1024;
-          }
-        } catch (e) {
-          debugPrint('[InferenceManager] Non-blocking captureFrame error: $e');
-        } finally {
-          _isCapturing = false;
-        }
-      }
-
-      final Uint8List activeBytes = _cachedFrameBytes ?? Uint8List(0);
-
       final now = DateTime.now();
       if (_fpsStartTime != null) {
         final elapsed = now.difference(_fpsStartTime!).inSeconds;
@@ -357,39 +322,38 @@ class InferenceManager extends ChangeNotifier {
         }
       }
 
-      // 1. Extract landmarks from active frame using single landmark processor source
-      final landmarks = await _processor.extractLandmarks(activeBytes, onLatencyMeasured: (lat) {
-        _landmarkLatency = lat;
-      });
+      final List<dynamic> list = data as List<dynamic>;
+      final List<HandLandmark> landmarks = list.map((item) {
+        final Map<dynamic, dynamic> map = item as Map<dynamic, dynamic>;
+        return HandLandmark(
+          map['id'] as int,
+          (map['x'] as num).toDouble(),
+          (map['y'] as num).toDouble(),
+          (map['z'] as num).toDouble(),
+        );
+      }).toList();
 
       _currentLandmarks = landmarks;
 
-      // 2. Normalize and run TensorFlow Lite model inference
       if (landmarks.isNotEmpty) {
-        if (_processor.activeSimulationLabel == 'idle') {
-          _prediction = '';
-        } else {
-          final normalizedVector = normalizeLandmarks(landmarks);
-          if (normalizedVector.length == 42 && _isInitialized) {
-            final result = predict(normalizedVector);
-            debugPrint('[TFLite] Predicted: ${result.label}, confidence: ${(result.confidence * 100).toStringAsFixed(0)}%');
-
-            if (result.confidence >= 0.80 && result.label != 'unknown') {
-              _prediction = result.label;
-              stabilizer.processPrediction(result);
-            }
-          }
+        final normalized = normalizeLandmarks(landmarks);
+        if (normalized.isNotEmpty) {
+          final result = predict(normalized);
+          _prediction = result.label;
+          stabilizer.processPrediction(result);
         }
+      } else {
+        _prediction = '';
       }
-
       notifyListeners();
     } catch (e) {
-      debugPrint('[InferenceManager] Error in processing loop: $e');
+      debugPrint('[InferenceManager] Error processing native landmarks: $e');
     }
   }
 
   @override
   void dispose() {
+    _landmarkSub?.cancel();
     stop();
     stabilizer.dispose();
     _interpreter?.close();

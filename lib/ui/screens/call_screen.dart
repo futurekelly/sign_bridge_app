@@ -16,9 +16,9 @@ import '../../data/models/translation_message.dart';
 import '../../core/theme.dart';
 import '../../core/spacing.dart';
 import '../widgets/call_controls.dart';
-import '../widgets/gif_overlay.dart';
-import '../widgets/caption_overlay.dart';
+import '../widgets/translation_overlay.dart';
 import '../widgets/ai_status_indicator.dart';
+
 
 class CallScreen extends StatelessWidget {
   const CallScreen({super.key});
@@ -380,19 +380,15 @@ class _CallViewState extends State<_CallView> {
 
             // ── Role-based overlays ──
 
-            // GIF overlay (Deaf + Both)
-            GifOverlay(
-              liveStream: controller.translation.liveResultStream,
-              userRole: role,
+            // Single unified translation overlay (replaces old GifOverlay + CaptionOverlay pair).
+            // Positioned at bottom:220 — well above the toolbar at bottom:90.
+            // Shows: source chip + large emoji + English word + Swahili word.
+            // Auto-fades after 4 s; imperatively dismissed via clearStream on gesture end.
+            TranslationOverlay(
+              liveStream:  controller.translation.liveResultStream,
+              clearStream: controller.translation.clearStream,
             ),
 
-            // Caption overlay (Deaf + Both, or if enabled in settings)
-            CaptionOverlay(
-              liveStream: controller.translation.liveResultStream,
-              userRole: role,
-              fontSize: a11y.captionFontSize,
-              enabled: a11y.captionsEnabled,
-            ),
 
             // Visual Flashlight Overlay (Strobe Flash Alert for Deaf Users)
             if (_showFlash)
@@ -404,18 +400,19 @@ class _CallViewState extends State<_CallView> {
                 ),
               ),
 
-            // Floating Quick Sign Toolbar (Only shown to Deaf or Both roles)
+            // Floating Quick Sign Toolbar (Deaf / Both only)
+            // Positioned at bottom:90 so it sits cleanly above CallControls.
             if (role == UserRole.deaf || role == UserRole.both)
               Positioned(
-                bottom: 130,
+                bottom: 90,
                 left: 16,
                 right: 16,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.65),
-                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.black.withValues(alpha: 0.70),
+                      borderRadius: BorderRadius.circular(22),
                       border: Border.all(color: Colors.white12, width: 1.5),
                     ),
                     child: SingleChildScrollView(
@@ -423,21 +420,22 @@ class _CallViewState extends State<_CallView> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _buildQuickSignButton(controller, 'hello', '👋', 'Habari / Hello'),
-                          const SizedBox(width: 8),
-                          _buildQuickSignButton(controller, 'yes', '☝️', 'Ndiyo / Yes'),
-                          const SizedBox(width: 8),
-                          _buildQuickSignButton(controller, 'no', '✌️', 'Hapana / No'),
-                          const SizedBox(width: 8),
-                          _buildQuickSignButton(controller, 'help', '🤟', 'Msaada / Help'),
-                          const SizedBox(width: 8),
-                          _buildQuickSignButton(controller, 'thank_you', '🙏', 'Asante / Thank You'),
+                          _buildQuickSignButton(controller, 'hello',     '👋', 'Hello'),
+                          const SizedBox(width: 6),
+                          _buildQuickSignButton(controller, 'yes',       '👍', 'Yes'),
+                          const SizedBox(width: 6),
+                          _buildQuickSignButton(controller, 'no',        '👎', 'No'),
+                          const SizedBox(width: 6),
+                          _buildQuickSignButton(controller, 'thank_you', '✌️',  'Thank You'),
+                          const SizedBox(width: 6),
+                          _buildQuickSignButton(controller, 'help',      '✊', 'Help'),
                         ],
                       ),
                     ),
                   ),
                 ),
               ),
+
 
             // Bottom controls
             Align(
@@ -458,28 +456,26 @@ class _CallViewState extends State<_CallView> {
 
   Widget _buildQuickSignButton(CallController controller, String label, String emoji, String text) {
     final activeLabel = controller.inferenceManager.prediction;
-    final isSelected = activeLabel == label;
+    final isSelected  = activeLabel == label;
 
     return Material(
-      color: isSelected ? Colors.teal.withValues(alpha: 0.8) : Colors.white10,
-      borderRadius: BorderRadius.circular(16),
+      color:        isSelected ? Colors.teal.withValues(alpha: 0.80) : Colors.white.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          _triggerSimulatedSign(controller, label);
-        },
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _triggerSimulatedSign(controller, label),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 18)),
-              const SizedBox(width: 6),
+              Text(emoji, style: const TextStyle(fontSize: 24)),
+              const SizedBox(height: 2),
               Text(
                 text,
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
+                  color:      Colors.white,
+                  fontSize:   10,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -491,16 +487,19 @@ class _CallViewState extends State<_CallView> {
   }
 
   void _triggerSimulatedSign(CallController controller, String label) {
-    // 1. Update landmark shape for the visual hand skeleton overlay
+    // 1. Morph hand skeleton to the selected gesture shape.
+    //    LandmarkProcessor generates the new coordinates on the next 100 ms tick.
     controller.inferenceManager.setSimulationLabel(label);
 
     // 2. Immediately fire the full pipeline:
-    //    TranslationController → CaptionOverlay + TTS + WebRTC DataChannel
-    //    This guarantees delivery even if the TFLite model confidence gate
-    //    doesn't reach the 3-frame threshold on simulated coordinates.
+    //    TranslationController → TranslationOverlay + TTS + WebRTC DataChannel.
+    //    simulateLocalGesture also sets the active-gesture guard so the
+    //    rule-based classifier doesn't double-emit TTS from the background loop.
     controller.translation.simulateLocalGesture(label);
 
-    // 3. Auto-reset landmark shape to idle waving after 4 seconds
+    // 3. Auto-reset skeleton to idle after 4 s.
+    //    When simulation goes idle, InferenceManager stops feeding the stabilizer,
+    //    which triggers gestureEndStream → overlay clears itself.
     Timer(const Duration(seconds: 4), () {
       controller.inferenceManager.setSimulationLabel('idle');
     });

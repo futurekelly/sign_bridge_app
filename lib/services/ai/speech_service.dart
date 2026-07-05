@@ -59,7 +59,7 @@ class SpeechService {
       final ok = await initialize(locale: _locale);
       if (!ok) {
         debugPrint('[SpeechService] Skipping start: SpeechToText is not available on this device.');
-        _statusCtrl.add(AiStatus.error);
+        _statusCtrl.add(AiStatus.idle);
         return;
       }
     }
@@ -80,19 +80,31 @@ class SpeechService {
           partialResults: true,
         ),
         onResult: (result) {
-          final words = result.recognizedWords.trim();
+          final words = result.recognizedWords.trim().toLowerCase();
           if (words.isEmpty) return;
 
-          // Emit final results always; also emit partials ≥ 3 chars
-          // so short words (yes, no) are captured before auto-timeout.
-          if (result.finalResult || words.length >= 3) {
+          // Only emit if:
+          //   (a) STT declared this a final result, OR
+          //   (b) Partial text exactly matches a vocabulary word (catch short words early).
+          // This prevents mid-word fragments ("hel", "than") from displaying as captions.
+          const vocab = {
+            'hello', 'habari', 'hi',
+            'yes',   'ndiyo',
+            'no',    'hapana',
+            'help',  'msaada',
+            'thank you', 'thank_you', 'asante', 'thanks',
+          };
+          final matchesVocab = vocab.any((v) => words == v || words.contains(v));
+
+          if (result.finalResult || matchesVocab) {
             _resultCtrl.add(TranslationMessage(
-              text: words,
+              text: result.recognizedWords.trim(),
               source: 'speech',
               language: languageTag,
             ));
           }
         },
+
       );
     } catch (e) {
       debugPrint('[SpeechService] Error during listen: $e');
@@ -139,4 +151,4 @@ class SpeechService {
     }
   }
 }
-
+

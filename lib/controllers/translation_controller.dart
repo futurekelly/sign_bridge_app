@@ -51,7 +51,7 @@ class TranslationController extends ChangeNotifier {
   final _historyCtrl = StreamController<List<TranslationMessage>>.broadcast();
   final _statusCtrl = StreamController<AiStatus>.broadcast();
 
-  /// LIVE — single latest result. caption_overlay + gif_overlay subscribe.
+  /// LIVE — single latest result. TranslationOverlay subscribes.
   Stream<TranslationMessage> get liveResultStream => _liveCtrl.stream;
 
   /// HISTORY — full conversation log. translation_panel subscribes.
@@ -60,18 +60,27 @@ class TranslationController extends ChangeNotifier {
   /// STATUS — system state. ai_status_overlay subscribes.
   Stream<AiStatus> get statusStream => _statusCtrl.stream;
 
+  /// CLEAR — fires when the hand is removed (gesture ended).
+  /// TranslationOverlay listens to this to immediately dismiss the card.
+  Stream<void> get clearStream => _clearCtrl.stream;
+
   /// Exposes InferenceManager for UI access to performance stats and hand landmarks
   InferenceManager get inferenceManager => _gesture.inferenceManager;
 
   // ── Internal state ──
   final List<TranslationMessage> _historyCache = [];
   final List<StreamSubscription> _subs = [];
+  final _clearCtrl = StreamController<void>.broadcast();
 
-  bool _started = false;
-  String _languageCode = 'en';
-  bool _ttsEnabled = true;
+  bool    _started       = false;
+  String  _languageCode  = 'en';
+  bool    _ttsEnabled    = true;
   AiStatus _currentStatus = AiStatus.idle;
-  String get languageTag => _languageCode;
+  String  get languageTag => _languageCode;
+
+  // Active-gesture guard: prevents repeated TTS when the same gesture is held.
+  String?   _activeGestureLabel;
+  DateTime? _activeGestureSince;
 
   // ─────────────────────────────────────────────
   // CONSTRUCTION
@@ -111,8 +120,15 @@ class TranslationController extends ChangeNotifier {
     // Initialize TTS with the correct language.
     await _tts.initialize(language: ttsLang);
 
-    // Milestone 4B: Subscribe to PredictionStabilizer.stablePredictionStream
+    // Subscribe to PredictionStabilizer streams
     _subs.add(_gesture.inferenceManager.stabilizer.stablePredictionStream.listen(_onStablePrediction));
+    _subs.add(_gesture.inferenceManager.stabilizer.gestureEndStream.listen((_) {
+      // Hand removed → clear active label and notify overlay to dismiss.
+      _activeGestureLabel = null;
+      _activeGestureSince = null;
+      if (!_clearCtrl.isClosed) _clearCtrl.add(null);
+      debugPrint('[TranslationController] Gesture ended — overlay dismissed');
+    }));
     _subs.add(_gesture.statusStream.listen(_emitStatus));
 
     _subs.add(_speech.resultStream.listen(_onSpeechResult));
@@ -152,19 +168,31 @@ class TranslationController extends ChangeNotifier {
   // INCOMING (LOCAL AI)
   // ─────────────────────────────────────────────
 
-  /// Milestone 4B: Handles stabilized predictions from PredictionStabilizer.
+  /// Handles stabilized predictions from PredictionStabilizer.
   /// Publishes locally, forwards to remote peer via DataChannel, and speaks via TTS if enabled.
   void _onStablePrediction(PredictionResult result) {
-    final String rawLabel = result.label;
-    final String gifKey = GestureMapperService.mapTextToGifKey(rawLabel) ?? rawLabel;
+    // Guard: if simulateLocalGesture() already dispatched this word within 3 s,
+    // skip re-emission to prevent a second TTS call from the stabilizer loop.
+    if (result.label == _activeGestureLabel && _activeGestureSince != null) {
+      if (DateTime.now().difference(_activeGestureSince!) < const Duration(seconds: 3)) {
+        debugPrint('[TranslationController] Skip duplicate stabilizer emission for ${result.label}');
+        return;
+      }
+    }
+
+    final String rawLabel       = result.label;
+    final String gifKey         = GestureMapperService.mapTextToGifKey(rawLabel) ?? rawLabel;
     final String translatedText = AppTranslations.t('gesture.$rawLabel', _languageCode);
 
     final msg = TranslationMessage(
-      text: translatedText,
-      source: 'gesture',
+      text:     translatedText,
+      source:   'gesture',
       language: _languageCode,
-      gifKey: gifKey,
+      gifKey:   gifKey,
     );
+
+    _activeGestureLabel = rawLabel;
+    _activeGestureSince = DateTime.now();
 
     _publishLocal(msg);
     if (_ttsEnabled) {
@@ -192,16 +220,31 @@ class TranslationController extends ChangeNotifier {
       final msg = TranslationMessage.fromJson(map); // fromPeer = true
 
       // Re-validate gifKey on this side (assets may differ between builds).
-      final enriched = msg.copyWith(
-        gifKey: msg.gifKey ?? GestureMapperService.mapTextToGifKey(msg.text),
-      );
+      final String? effectiveGifKey = msg.gifKey ?? GestureMapperService.mapTextToGifKey(msg.text);
 
-      _publishRemote(enriched);
+      // If it's a gesture, we re-translate it to the LOCAL language using the gifKey
+      // so the TTS and Captions match the receiver's preference.
+      TranslationMessage processed = msg.copyWith(gifKey: effectiveGifKey);
+
+      if (msg.source == 'gesture' && effectiveGifKey != null) {
+        final localText = AppTranslations.t('gesture.$effectiveGifKey', _languageCode);
+        processed = TranslationMessage(
+          id: msg.id,
+          text: localText,
+          source: 'gesture',
+          language: _languageCode,
+          gifKey: effectiveGifKey,
+          timestamp: msg.timestamp,
+          fromPeer: true,
+        );
+      }
+
+      _publishRemote(processed);
 
       // If the peer's gesture is being shown to us, speak it aloud via TTS if enabled
-      if (enriched.source == 'gesture') {
+      if (processed.source == 'gesture') {
         if (_ttsEnabled) {
-          _tts.speak(enriched.text);
+          _tts.speak(processed.text);
         }
       }
     } catch (e) {
@@ -247,16 +290,20 @@ class TranslationController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Simulates a local gesture result for testing (injection hook)
+  /// Simulates a local gesture result (toolbar tap injection hook).
+  /// Sets the active-gesture guard so the stabilizer loop doesn't double-emit TTS.
   void simulateLocalGesture(String rawLabel) {
-    final String gifKey = GestureMapperService.mapTextToGifKey(rawLabel) ?? rawLabel;
+    _activeGestureLabel = rawLabel;
+    _activeGestureSince = DateTime.now();
+
+    final String gifKey         = GestureMapperService.mapTextToGifKey(rawLabel) ?? rawLabel;
     final String translatedText = AppTranslations.t('gesture.$rawLabel', _languageCode);
 
     final msg = TranslationMessage(
-      text: translatedText,
-      source: 'gesture',
+      text:     translatedText,
+      source:   'gesture',
       language: _languageCode,
-      gifKey: gifKey,
+      gifKey:   gifKey,
     );
 
     _publishLocal(msg);
@@ -288,6 +335,6 @@ class TranslationController extends ChangeNotifier {
     await _liveCtrl.close();
     await _historyCtrl.close();
     await _statusCtrl.close();
+    await _clearCtrl.close();
     super.dispose();
-  }
-}
+  }}

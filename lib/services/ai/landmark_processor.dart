@@ -1,129 +1,106 @@
-import 'dart:math';
-import 'package:flutter/foundation.dart';
+﻿import 'dart:math';
+import 'dart:typed_data';
 
 class HandLandmark {
   final int id;
-  final double x; // Normalized 0.0 to 1.0 (relative to frame width)
-  final double y; // Normalized 0.0 to 1.0 (relative to frame height)
-  final double z; // Normalized relative depth
-
+  final double x;
+  final double y;
+  final double z;
   HandLandmark(this.id, this.x, this.y, this.z);
-
   @override
   String toString() => 'LM($id: x=${x.toStringAsFixed(2)}, y=${y.toStringAsFixed(2)})';
 }
 
+/// LandmarkProcessor
+/// Gesture shapes:
+///   hello     -> open palm (all extended)
+///   yes       -> thumb up (thumb only, tip above wrist)
+///   no        -> thumb down (thumb only, tip below wrist)
+///   thank_you -> peace sign (index + middle)
+///   help      -> closed fist (all curled)
 class LandmarkProcessor {
-  // Angle used to simulate coordinate movements over time
   double _animationAngle = 0.0;
   String activeSimulationLabel = 'idle';
 
-  /// Processes raw image bytes and returns a list of 21 extracted hand landmarks.
-  /// Measures execution latency for performance validation.
-  Future<List<HandLandmark>> extractLandmarks(Uint8List frameBytes, {required Function(int latencyMs) onLatencyMeasured}) async {
-    final stopwatch = Stopwatch()..start();
-
-    // 1. Simulating image parsing (YUV/RGBA dimensions checks)
+  Future<List<HandLandmark>> extractLandmarks(
+    Uint8List frameBytes, {
+    required Function(int latencyMs) onLatencyMeasured,
+  }) async {
+    final sw = Stopwatch()..start();
     await Future.delayed(Duration(milliseconds: 5 + Random().nextInt(5)));
+    _animationAngle = (_animationAngle + 0.15) % (2 * pi);
 
-    // 2. Generating 21 landmarks mapping the hand joints
-    _animationAngle += 0.15;
-    if (_animationAngle > 2 * pi) {
-      _animationAngle -= 2 * pi;
-    }
-
-    final List<HandLandmark> landmarks = [];
-    
-    // Hand Center (Wrist - Joint 0)
-    const double wristX = 0.5;
+    final landmarks = <HandLandmark>[];
+    const double wristX = 0.50;
     const double wristY = 0.65;
     landmarks.add(HandLandmark(0, wristX, wristY, 0.0));
 
-    // Determine finger extensions based on active simulation label (Milestone 2/3 TSL vocabulary)
-    bool thumbExt = true;
-    bool indexExt = true;
+    bool thumbExt  = true;
+    bool indexExt  = true;
     bool middleExt = true;
-    bool ringExt = true;
-    bool pinkyExt = true;
+    bool ringExt   = true;
+    bool pinkyExt  = true;
+    double? thumbAngle;
 
-    if (activeSimulationLabel == 'hello') {
+    final label = activeSimulationLabel;
+    if (label == 'hello') {
       thumbExt = indexExt = middleExt = ringExt = pinkyExt = true;
-    } else if (activeSimulationLabel == 'yes') {
-      thumbExt = middleExt = ringExt = pinkyExt = false;
-      indexExt = true;
-    } else if (activeSimulationLabel == 'no') {
-      thumbExt = ringExt = pinkyExt = false;
-      indexExt = middleExt = true;
-    } else if (activeSimulationLabel == 'help') {
-      thumbExt = pinkyExt = false;
-      indexExt = middleExt = ringExt = true;
-    } else if (activeSimulationLabel == 'water') {
-      thumbExt = false;
-      indexExt = middleExt = ringExt = pinkyExt = true;
-    } else if (activeSimulationLabel == 'good') {
+    } else if (label == 'yes') {
       thumbExt = true;
       indexExt = middleExt = ringExt = pinkyExt = false;
-    } else if (activeSimulationLabel == 'stop') {
+      thumbAngle = 0.05;
+    } else if (label == 'no') {
+      thumbExt = true;
+      indexExt = middleExt = ringExt = pinkyExt = false;
+      thumbAngle = pi - 0.05;
+    } else if (label == 'thank_you') {
+      thumbExt = false;
+      indexExt = true;
+      middleExt = true;
+      ringExt = pinkyExt = false;
+    } else if (label == 'help') {
       thumbExt = indexExt = middleExt = ringExt = pinkyExt = false;
-    } else if (activeSimulationLabel == 'iloveyou') {
-      thumbExt = indexExt = middleExt = ringExt = false;
-      pinkyExt = true;
-    } else if (activeSimulationLabel == 'thank_you') {
+    } else if (label == 'water') {
       thumbExt = false;
       indexExt = middleExt = ringExt = pinkyExt = true;
-    } else {
-      // Idle animated curl
+    } else if (label == 'good') {
       thumbExt = true;
-      indexExt = (1.0 - 0.25 * sin(_animationAngle)) > 0.85;
+      indexExt = middleExt = ringExt = pinkyExt = false;
+    } else if (label == 'stop') {
+      thumbExt = indexExt = middleExt = ringExt = pinkyExt = false;
+    } else if (label == 'iloveyou') {
+      thumbExt = true; indexExt = true;
+      middleExt = ringExt = false; pinkyExt = true;
+    } else {
+      thumbExt  = true;
+      indexExt  = (1.0 - 0.25 * sin(_animationAngle))       > 0.85;
       middleExt = (1.0 - 0.25 * sin(_animationAngle + 0.5)) > 0.85;
-      ringExt = (1.0 - 0.25 * sin(_animationAngle + 1.0)) > 0.85;
-      pinkyExt = (1.0 - 0.25 * sin(_animationAngle + 1.5)) > 0.85;
+      ringExt   = (1.0 - 0.25 * sin(_animationAngle + 1.0)) > 0.85;
+      pinkyExt  = (1.0 - 0.25 * sin(_animationAngle + 1.5)) > 0.85;
     }
 
-    // Generate 5 fingers (4 joints each)
-    // Angles relative to wrist base
-    final fingerAngles = [-0.65, -0.25, 0.05, 0.35, 0.65];
-    int jointId = 1;
+    const defaultAngles = [-0.55, -0.22, 0.04, 0.30, 0.56];
+    const jointLengths  = [0.08,  0.06,  0.05, 0.04];
 
+    int jointId = 1;
     for (int f = 0; f < 5; f++) {
-      final double fAngle = fingerAngles[f];
+      final double fAngle = (f == 0 && thumbAngle != null) ? thumbAngle : defaultAngles[f];
+      final bool isExt = switch (f) {
+        0 => thumbExt, 1 => indexExt, 2 => middleExt, 3 => ringExt, _ => pinkyExt,
+      };
+      final double curl = isExt ? 1.0 : 0.28;
       double prevX = wristX;
       double prevY = wristY;
-      
-      final jointLengths = [0.08, 0.06, 0.05, 0.04];
-      bool isExt = true;
-      if (f == 0) {
-        isExt = thumbExt;
-      } else if (f == 1) {
-        isExt = indexExt;
-      } else if (f == 2) {
-        isExt = middleExt;
-      } else if (f == 3) {
-        isExt = ringExt;
-      } else if (f == 4) {
-        isExt = pinkyExt;
-      }
-
-      final double curlFactor = isExt ? 1.0 : 0.35;
-
       for (int j = 0; j < 4; j++) {
         final double len = jointLengths[j];
-        final double dx = len * sin(fAngle) * curlFactor;
-        final double dy = -len * cos(fAngle) * curlFactor;
-        
-        final double x = (prevX + dx).clamp(0.0, 1.0);
-        final double y = (prevY + dy).clamp(0.0, 1.0);
-        final double z = -0.01 * j;
-
-        landmarks.add(HandLandmark(jointId++, x, y, z));
-        prevX = x;
-        prevY = y;
+        prevX = (prevX + len * sin(fAngle) * curl).clamp(0.0, 1.0);
+        prevY = (prevY - len * cos(fAngle) * curl).clamp(0.0, 1.0);
+        landmarks.add(HandLandmark(jointId++, prevX, prevY, -0.01 * j));
       }
     }
 
-    stopwatch.stop();
-    onLatencyMeasured(stopwatch.elapsedMilliseconds);
-
+    sw.stop();
+    onLatencyMeasured(sw.elapsedMilliseconds);
     return landmarks;
   }
 }

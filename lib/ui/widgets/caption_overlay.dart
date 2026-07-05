@@ -53,31 +53,19 @@ class _CaptionOverlayState extends State<CaptionOverlay>
     if (!widget.enabled) return;
 
     String displayText = msg.text.replaceAll('_', ' ');
-    final cleanText = msg.text.trim().toLowerCase().replaceAll('_', ' ');
+    final gifKey = msg.gifKey;
 
-    if (msg.source == 'speech') {
-      if (cleanText == 'hello' || cleanText == 'habari') {
-        displayText = "👋\nHello\nHabari";
-      } else if (cleanText == 'yes' || cleanText == 'ndiyo') {
-        displayText = "👍\nYes\nNdiyo";
-      } else if (cleanText == 'no' || cleanText == 'hapana') {
-        displayText = "✋\nNo\nHapana";
-      } else if (cleanText == 'help' || cleanText == 'msaada') {
-        displayText = "🆘\nHelp\nMsaada";
-      } else if (cleanText == 'thank you' || cleanText == 'thank_you' || cleanText == 'asante') {
-        displayText = "🙏\nThank You\nAsante";
-      }
-    } else if (msg.source == 'gesture') {
-      if (cleanText == 'hello') {
-        displayText = "👋\nHello\nHabari";
-      } else if (cleanText == 'yes') {
-        displayText = "☝️\nYes\nNdiyo";
-      } else if (cleanText == 'no') {
-        displayText = "✌️\nNo\nHapana";
-      } else if (cleanText == 'help') {
-        displayText = "🤟\nHelp\nMsaada";
-      } else if (cleanText == 'thank you' || cleanText == 'thank_you') {
-        displayText = "🙏\nThank You\nAsante";
+    // Use emoji mapping for the 5 demo words if gifKey matches
+    if (gifKey != null) {
+      final emoji = _getEmojiForGifKey(gifKey);
+      if (emoji != null) {
+        // Format: [Emoji] \n [Text] \n [Swahili translation if applicable]
+        final swahili = _getSwahiliForGifKey(gifKey);
+        if (swahili != null) {
+          displayText = "$emoji\n$displayText\n$swahili";
+        } else {
+          displayText = "$emoji\n$displayText";
+        }
       }
     }
 
@@ -95,6 +83,29 @@ class _CaptionOverlayState extends State<CaptionOverlay>
       });
     });
   }
+
+  String? _getEmojiForGifKey(String key) {
+    return switch (key) {
+      'hello'     => '👋',
+      'yes'       => '👍',
+      'no'        => '✋',
+      'help'      => '🆘',
+      'thank_you' => '🙏',
+      _           => null,
+    };
+  }
+
+  String? _getSwahiliForGifKey(String key) {
+    return switch (key) {
+      'hello'     => 'Habari',
+      'yes'       => 'Ndiyo',
+      'no'        => 'Hapana',
+      'help'      => 'Msaada',
+      'thank_you' => 'Asante',
+      _           => null,
+    };
+  }
+
 
   @override
   void dispose() {
@@ -150,16 +161,22 @@ class _CaptionOverlayState extends State<CaptionOverlay>
               const SizedBox(width: AppSpacing.sm),
               // Caption text
               Expanded(
-                child: Text(
-                  _text,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: widget.fontSize,
-                    fontWeight: FontWeight.w500,
-                    height: 1.3,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _text,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: widget.fontSize,
+                        fontWeight: FontWeight.w600,
+                        height: 1.2,
+                      ),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ],

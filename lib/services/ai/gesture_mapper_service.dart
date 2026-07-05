@@ -14,12 +14,18 @@ class GestureMapperService {
   static const Map<String, String> _dictionary = {
     'hello': 'hello',
     'hi': 'hello',
+    'habari': 'hello',
+    'hujambo': 'hello',
     'thank you': 'thank_you',
     'thanks': 'thank_you',
     'thank_you': 'thank_you',
+    'asante': 'thank_you',
     'help': 'help',
+    'msaada': 'help',
     'yes': 'yes',
+    'ndiyo': 'yes',
     'no': 'no',
+    'hapana': 'no',
     'wewe': 'wewe',
     'mimi': 'mimi',
   };

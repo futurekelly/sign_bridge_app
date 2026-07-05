@@ -29,6 +29,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        ndk {
+            abiFilters.add("arm64-v8a")
+            abiFilters.add("armeabi-v7a")
+            abiFilters.add("x86_64")
+        }
     }
 
     buildTypes {
@@ -38,8 +43,20 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            excludes.add("lib/x86/**")
+        }
+    }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    compileOnly("io.github.webrtc-sdk:android:144.7559.01")
+    implementation("com.google.mediapipe:tasks-vision:0.10.26")
 }

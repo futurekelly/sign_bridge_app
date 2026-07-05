@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../core/enums.dart';
@@ -18,9 +17,6 @@ class GestureRecognitionService {
   // ── Internal state ──
   bool _running = false;
   bool get isRunning => _running;
-  
-  int _ticksCount = 0;
-
   // InferenceManager coordinates the frame capture loop and landmark pipeline
   late final InferenceManager inferenceManager;
 
@@ -80,6 +76,9 @@ class GestureRecognitionService {
 
   /// Takes hand landmarks, normalizes them, and runs gesture classification.
   /// Measures classifier latency for performance validation.
+  ///
+  /// Note: Real-time inference is now handled by InferenceManager loop.
+  /// This method is kept for legacy compatibility if needed.
   Future<String> classifyGesture(List<HandLandmark> landmarks, {required Function(int latencyMs) onLatencyMeasured}) async {
     final stopwatch = Stopwatch()..start();
 
@@ -89,54 +88,11 @@ class GestureRecognitionService {
       return '';
     }
 
-    // 1. Data Preprocessing & Normalization
-    // Normalize coordinates relative to wrist (Landmark 0)
-    final wrist = landmarks[0];
-    final List<double> relativeCoords = [];
+    final result = inferenceManager.classifyGesture(landmarks);
     
-    for (final lm in landmarks) {
-      relativeCoords.add(lm.x - wrist.x);
-      relativeCoords.add(lm.y - wrist.y);
-      relativeCoords.add(lm.z - wrist.z);
-    }
-
-    // Scale coordinates to fit unit box [-1.0, 1.0]
-    double maxVal = 0.0;
-    for (final coord in relativeCoords) {
-      if (coord.abs() > maxVal) {
-        maxVal = coord.abs();
-      }
-    }
-
-    final List<double> normalizedCoords = [];
-    if (maxVal > 0) {
-      for (final coord in relativeCoords) {
-        normalizedCoords.add(coord / maxVal);
-      }
-    } else {
-      normalizedCoords.addAll(relativeCoords);
-    }
-
-    // 2. Simulated Keras/TFLite Classifier Inference
-    // Mocking model execution overhead (TFLite typically takes 2-4ms for MLP keypoint inference)
-    await Future.delayed(Duration(milliseconds: 2 + Random().nextInt(3)));
-
-    // Pick a prediction dynamically based on joint movements
-    _ticksCount++;
-    final String predictedClass;
-    if (wrist.x < 0.45) {
-      predictedClass = 'hello';
-    } else if (wrist.x > 0.55) {
-      predictedClass = 'thank_you';
-    } else {
-      // Rotate between confirmative states
-      final idx = (_ticksCount ~/ 25) % 3; // every 25 ticks, cycle Yes/No/Help
-      predictedClass = ['yes', 'no', 'help'][idx];
-    }
-
     stopwatch.stop();
     onLatencyMeasured(stopwatch.elapsedMilliseconds);
 
-    return predictedClass;
+    return result.label;
   }
 }

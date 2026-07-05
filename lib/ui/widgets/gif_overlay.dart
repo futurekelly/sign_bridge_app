@@ -85,7 +85,7 @@ class _GifOverlayState extends State<GifOverlay>
 
     final scale = AccessibilityHelper.gifScale(widget.userRole);
     final size = 120.0 * scale;
-    final assetPath = GestureMapperService.assetPathForKey(_currentGifKey);
+    final emoji = _getEmojiForGifKey(_currentGifKey!);
 
     return Positioned(
       bottom: 140,
@@ -99,22 +99,21 @@ class _GifOverlayState extends State<GifOverlay>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // GIF display
+              // Emoji/GIF display
               Container(
                 width: size,
                 height: size,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  color: Colors.black.withValues(alpha: 0.15),
+                  color: Colors.white.withValues(alpha: 0.1),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: assetPath != null
-                    ? Image.asset(
-                        assetPath,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => _placeholder(),
-                      )
-                    : _placeholder(),
+                child: Center(
+                  child: Text(
+                    emoji ?? '❓',
+                    style: TextStyle(fontSize: size * 0.5),
+                  ),
+                ),
               ),
               const SizedBox(height: AppSpacing.xs),
               // Label
@@ -127,22 +126,6 @@ class _GifOverlayState extends State<GifOverlay>
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 2),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.sign_language,
-                      size: 12, color: Colors.white.withValues(alpha: 0.6)),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Sign Language',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -150,21 +133,14 @@ class _GifOverlayState extends State<GifOverlay>
     );
   }
 
-  Widget _placeholder() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.sign_language,
-              size: 32, color: Colors.white.withValues(alpha: 0.4)),
-          const SizedBox(height: 4),
-          Text(
-            'Sign',
-            style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
-          ),
-        ],
-      ),
-    );
+  String? _getEmojiForGifKey(String key) {
+    return switch (key) {
+      'hello'     => '👋',
+      'yes'       => '👍',
+      'no'        => '✋',
+      'help'      => '🆘',
+      'thank_you' => '🙏',
+      _           => '✨',
+    };
   }
 }

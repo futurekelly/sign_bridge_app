@@ -1,39 +1,39 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'inference_manager.dart';
 
-/// Service responsible for stabilizing raw TFLite gesture predictions.
-/// Enforces consecutive frame validation, confidence thresholding, and duplicate cooldown suppression.
+/// PredictionStabilizer
+/// Gates raw predictions to prevent UI noise.
+/// New: gestureEndStream fires 700 ms after last prediction (hand removed).
 class PredictionStabilizer {
-  final StreamController<PredictionResult> _stableStreamCtrl =
+  final StreamController<PredictionResult> _stableCtrl =
       StreamController<PredictionResult>.broadcast();
+  Stream<PredictionResult> get stablePredictionStream => _stableCtrl.stream;
 
-  /// Stream emitting only validated, stabilized gesture predictions.
-  Stream<PredictionResult> get stablePredictionStream => _stableStreamCtrl.stream;
+  final StreamController<void> _endCtrl = StreamController<void>.broadcast();
+  Stream<void> get gestureEndStream => _endCtrl.stream;
 
-  // Configuration thresholds
-  static const int requiredConsecutiveFrames = 3;
-  static const double minConfidenceThreshold = 0.80;
-  static const Duration cooldownDuration = Duration(seconds: 1);
+  static const int      requiredConsecutiveFrames = 3;
+  static const double   minConfidenceThreshold    = 0.75;
+  static const Duration cooldownDuration          = Duration(seconds: 2);
+  static const Duration gestureEndTimeout         = Duration(milliseconds: 700);
 
-  // Consecutive candidate state tracking
-  String? _candidateLabel;
-  int _candidateCount = 0;
-
-  // Cooldown & emission state tracking
-  String? _lastEmittedLabel;
+  String?   _candidateLabel;
+  int       _candidateCount   = 0;
+  String?   _lastEmittedLabel;
   DateTime? _lastEmittedTime;
+  Timer?    _gestureEndTimer;
 
-  /// Processes an incoming raw prediction result from InferenceManager.
   void processPrediction(PredictionResult result) {
-    // 1. Confidence Validation (Requirement 4)
+    _gestureEndTimer?.cancel();
+    _gestureEndTimer = Timer(gestureEndTimeout, _onGestureEnded);
+
     if (result.confidence < minConfidenceThreshold) {
       _candidateLabel = null;
       _candidateCount = 0;
       return;
     }
 
-    // 2. Consecutive Prediction Tracking (Requirement 2)
     if (result.label == _candidateLabel) {
       _candidateCount++;
     } else {
@@ -41,45 +41,49 @@ class PredictionStabilizer {
       _candidateCount = 1;
     }
 
-    final displayCount = _candidateCount > requiredConsecutiveFrames
-        ? requiredConsecutiveFrames
-        : _candidateCount;
-    debugPrint('[PredictionStabilizer] Candidate: ${result.label} ($displayCount/$requiredConsecutiveFrames)');
+    final displayed = _candidateCount.clamp(1, requiredConsecutiveFrames);
+    debugPrint('[Stabilizer] Candidate: ${result.label} ($displayed/$requiredConsecutiveFrames)');
 
-    // 3. Evaluate if consecutive frame threshold is satisfied
     if (_candidateCount >= requiredConsecutiveFrames) {
-      final now = DateTime.now();
-      final isDuplicate = (result.label == _lastEmittedLabel);
-      bool isCooldownActive = false;
+      final now         = DateTime.now();
+      final isDuplicate = result.label == _lastEmittedLabel;
+      final inCooldown  = isDuplicate && _lastEmittedTime != null &&
+          now.difference(_lastEmittedTime!) < cooldownDuration;
 
-      if (isDuplicate && _lastEmittedTime != null) {
-        if (now.difference(_lastEmittedTime!) < cooldownDuration) {
-          isCooldownActive = true;
-        }
+      if (inCooldown) {
+        debugPrint('[Stabilizer] Cooldown active for ${result.label}');
+        return;
       }
 
-      // 4. Handle Cooldown & Emission (Requirements 3 & 5)
-      if (isCooldownActive) {
-        debugPrint('[PredictionStabilizer] Cooldown active...');
-      } else {
-        _lastEmittedLabel = result.label;
-        _lastEmittedTime = now;
-        debugPrint('[PredictionStabilizer] Stable prediction emitted: ${result.label}');
-        _stableStreamCtrl.add(result);
-      }
+      _lastEmittedLabel = result.label;
+      _lastEmittedTime  = now;
+      debugPrint('[Stabilizer] Emitted: ${result.label} (${(result.confidence * 100).toStringAsFixed(0)}%)');
+      _stableCtrl.add(result);
     }
   }
 
-  /// Resets all stabilizer counters and cooldown states.
-  void reset() {
-    _candidateLabel = null;
-    _candidateCount = 0;
+  void _onGestureEnded() {
+    if (_lastEmittedLabel != null) {
+      debugPrint('[Stabilizer] Gesture ended');
+      _endCtrl.add(null);
+    }
     _lastEmittedLabel = null;
-    _lastEmittedTime = null;
+    _candidateLabel   = null;
+    _candidateCount   = 0;
   }
 
-  /// Closes stream resources safely.
+  void reset() {
+    _gestureEndTimer?.cancel();
+    _gestureEndTimer  = null;
+    _candidateLabel   = null;
+    _candidateCount   = 0;
+    _lastEmittedLabel = null;
+    _lastEmittedTime  = null;
+  }
+
   void dispose() {
-    _stableStreamCtrl.close();
+    _gestureEndTimer?.cancel();
+    _stableCtrl.close();
+    _endCtrl.close();
   }
 }

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SignBridge Academic Report Blueprint & TFLite Guide</title>
+  <style>
+    :root {
+      --primary: #0f172a;
+      --secondary: #2563eb;
+      --accent: #3b82f6;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #334155;
+      --text-dark: #0f172a;
+      --code-bg: #1e293b;
+      --code-text: #f8fafc;
+      --border: #e2e8f0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 50px;
+      padding-bottom: 30px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    h1 {
+      color: var(--text-dark);
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      font-size: 1.2rem;
+      color: var(--secondary);
+      font-weight: 500;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 12px;
+      background-color: #dbeafe;
+      color: var(--secondary);
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-top: 15px;
+    }
+
+    section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+    }
+
+    h2 {
+      color: var(--text-dark);
+      font-size: 1.75rem;
+      border-left: 4px solid var(--secondary);
+      padding-left: 15px;
+      margin-top: 0;
+      margin-bottom: 20px;
+    }
+
+    h3 {
+      color: var(--text-dark);
+      font-size: 1.3rem;
+      margin-top: 25px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      margin-bottom: 15px;
+    }
+
+    ul, ol {
+      margin-bottom: 20px;
+      padding-left: 25px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    code {
+      font-family: 'Fira Code', Consolas, monospace;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.9em;
+      margin-bottom: 20px;
+    }
+
+    pre code {
+      background: none;
+      color: inherit;
+      padding: 0;
+      border-radius: 0;
+    }
+
+    .alert {
+      background: #eff6ff;
+      border-left: 4px solid var(--accent);
+      padding: 15px 20px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 25px;
+    }
+
+    .alert-title {
+      font-weight: 700;
+      color: #1e40af;
+      margin-bottom: 5px;
+    }
+
+    .table-container {
+      overflow-x: auto;
+      margin-bottom: 25px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 12px 15px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background-color: #f8fafc;
+      color: var(--text-dark);
+      font-weight: 600;
+    }
+
+    .prompt-box {
+      background: #f8fafc;
+      border: 2px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 25px;
+      margin-top: 20px;
+      position: relative;
+    }
+
+    .prompt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      font-weight: 700;
+      color: var(--text-dark);
+    }
+
+    .copy-btn {
+      background: var(--secondary);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: #1d4ed8;
+    }
+
+    @media print {
+      body {
+        background-color: white;
+        color: black;
+      }
+      .container {
+        max-width: 100%;
+        padding: 0;
+      }
+      section {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        margin-bottom: 40px;
+        page-break-inside: avoid;
+      }
+      .copy-btn {
+        display: none;
+      }
+      pre {
+        background: #f8fafc;
+        color: black;
+        border: 1px solid #cbd5e1;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>SignBridge Academic Report Blueprint</h1>
+      <div class="subtitle">A Dissertation Framework & TFLite Vocabulary Expansion Strategy</div>
+      <span class="badge">Version 1.0 (Academic Draft)</span>
+    </header>
+
+    <!-- SECTION 1: REPORT SCOPE -->
+    <section id="project-scope">
+      <h2>1. Project Scope & Architecture</h2>
+      <p>
+        The <strong>SignBridge</strong> system is a bidirectional translation platform that integrates real-time WebRTC calling with on-device hand gesture recognition. It addresses the communication gap between Deaf users (who use Sign Language) and Hearing users (who use spoken language).
+      </p>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature Domain</th>
+              <th>Technologies Involved</th>
+              <th>Current Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Direct Peer Dialing</strong></td>
+              <td>Firebase Auth, Cloud Firestore (Signaling)</td>
+              <td>Completed (Phase 1)</td>
+            </tr>
+            <tr>
+              <td><strong>Haptic Call Alerts</strong></td>
+              <td>Android Haptic Engine, Periodic Vibration Loop</td>
+              <td>Completed (Phase 1)</td>
+            </tr>
+            <tr>
+              <td><strong>Real-Time Video Stream</strong></td>
+              <td>WebRTC (Direct P2P Connection)</td>
+              <td>Completed (Phase 2)</td>
+            </tr>
+            <tr>
+              <td><strong>On-Device AI Pipeline</strong></td>
+              <td>MediaPipe Tasks Vision, TensorFlow Lite (TFLite)</td>
+              <td>Completed (Phase 3)</td>
+            </tr>
+            <tr>
+              <td><strong>Gesture Translation</strong></td>
+              <td>Flutter TTS (Text-to-Speech), WebRTC DataChannel</td>
+              <td>Completed (Phase 3)</td>
+            </tr>
+            <tr>
+              <td><strong>Visual Overlay</strong></td>
+              <td>Custom Paint (Coordinate Axis Re-alignment)</td>
+              <td>Completed (Phase 3.1)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="alert">
+        <div class="alert-title">Academic Architecture Principle</div>
+        We maintain a clean boundary: the <strong>Native Android (Kotlin)</strong> layer acts purely as a coordinate producer (extracting landmarks from WebRTC video frames), while the <strong>Dart (Flutter)</strong> AI pipeline maintains all platform-agnostic business logic (normalization, TFLite inference, stabilization, and TTS).
+      </div>
+    </section>
+
+    <!-- SECTION 2: 2-HAND & 50+ VOCAB EXPANSION -->
+    <section id="tflite-guide">
+      <h2>2. Implementing 2-Hand & 50+ Word TFLite Classifier</h2>
+      <p>
+        To expand vocabulary to 50+ common sign words and involve two hands, the pipeline needs modifications across both the Kotlin and Dart layers.
+      </p>
+
+      <h3>Step A: Modify Native Android Code (Kotlin)</h3>
+      <p>
+        Open <code>android/app/src/main/kotlin/com/example/sign_bridge/HandLandmarkerHelper.kt</code> and update the <code>HandLandmarkerOptions</code> to support 2 hands:
+      </p>
+      <pre><code>// In HandLandmarkerHelper.kt:
+val options = HandLandmarkerOptions.builder()
+    .setBaseOptions(baseOptions)
+    .setMinHandDetectionConfidence(0.5f)
+    .setMinTrackingConfidence(0.5f)
+    .setMinHandPresenceConfidence(0.5f)
+    .setNumHands(2) // Change from 1 to 2
+    .setRunningMode(RunningMode.LIVE_STREAM)
+    .setResultListener { result, inputImage ->
+        val landmarksList = result.landmarks() // Contains coordinates for detected hands
+        val handsCount = landmarksList?.size ?: 0
+        
+        val payload = mutableMapOf<String, Any>()
+        
+        // Extract hand 0 (first hand)
+        if (handsCount > 0) {
+            payload["hand_0"] = landmarksList[0].mapIndexed { index, lm ->
+                mapOf("id" to index, "x" to lm.x(), "y" to lm.y(), "z" to lm.z())
+            }
+        } else {
+            payload["hand_0"] = emptyList<Map<String, Any>>()
+        }
+        
+        // Extract hand 1 (second hand)
+        if (handsCount > 1) {
+            payload["hand_1"] = landmarksList[1].mapIndexed { index, lm ->
+                mapOf("id" to index, "x" to lm.x(), "y" to lm.y(), "z" to lm.z())
+            }
+        } else {
+            payload["hand_1"] = emptyList<Map<String, Any>>()
+        }
+        
+        onLandmarksDetected?.invoke(payload)
+    }
+    .build()</code></pre>
+
+      <h3>Step B: Update Dart Input Extraction</h3>
+      <p>
+        In Dart (<code>lib/services/ai/inference_manager.dart</code>), change the input normalization to expect two hands. If only one hand is detected, pad the second hand with zeros:
+      </p>
+      <pre><code>// Target: 42 landmarks total (21 per hand) * 3 coordinates = 126 input features
+List<double> normalizeDualLandmarks(Map<String, List<HandLandmark>> hands) {
+  List<double> features = [];
+  
+  // Normalize Hand 0
+  if (hands['hand_0'] != null && hands['hand_0']!.isNotEmpty) {
+    features.addAll(_normalizeSingleHand(hands['hand_0']!));
+  } else {
+    features.addAll(List.filled(63, 0.0)); // Zero padding
+  }
+  
+  // Normalize Hand 1
+  if (hands['hand_1'] != null && hands['hand_1']!.isNotEmpty) {
+    features.addAll(_normalizeSingleHand(hands['hand_1']!));
+  } else {
+    features.addAll(List.filled(63, 0.0)); // Zero padding
+  }
+  
+  return features; // Exactly 126 features
+}</code></pre>
+
+      <h3>Step C: Python Training Script for 50+ Vocabulary Words</h3>
+      <p>
+        Use the script below to train your custom 126-input classifier using a simple Multi-Layer Perceptron (MLP) model. Convert it directly to <code>.tflite</code>:
+      </p>
+      <pre><code>import numpy as np
+import tensorflow as tf
+from tensorflow.keras import layers, models
+
+# 1. Load your collected landmark dataset (126 features per row)
+# X_train: numpy array of shape (N, 126)
+# y_train: numpy array of shape (N, 50) - one-hot encoded labels
+X_train = np.load('X_train.npy')
+y_train = np.load('y_train.npy')
+
+# 2. Build the Classifier MLP Model
+model = models.Sequential([
+    layers.Input(shape=(126,)),
+    layers.Dense(256, activation='relu'),
+    layers.Dropout(0.3),
+    layers.Dense(128, activation='relu'),
+    layers.Dropout(0.2),
+    layers.Dense(64, activation='relu'),
+    # 50 outputs for your classes
+    layers.Dense(50, activation='softmax')
+])
+
+model.compile(optimizer='adam',
+              loss='categorical_crossentropy',
+              metrics=['accuracy'])
+
+# 3. Train the model
+model.fit(X_train, y_train, epochs=150, batch_size=32, validation_split=0.2)
+
+# 4. Save and Convert to TensorFlow Lite
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+converter.optimizations = [tf.lite.Optimize.DEFAULT] # Quantization for mobile speed
+tflite_model = converter.convert()
+
+with open('gesture_model_v2.tflite', 'wb') as f:
+    f.write(tflite_model)
+print("Expanded TFLite Model Compiled Successfully!")</code></pre>
+    </section>
+
+    <!-- SECTION 3: THE GEMINI ACADEMIC PROMPT -->
+    <section id="gemini-prompt">
+      <h2>3. Academic Report Prompt for Gemini</h2>
+      <p>
+        Copy the prompt below and paste it into Gemini (or another LLM) to draft your formal academic dissertation report. This prompt feeds the assistant the exact technological choices, context, code structures, and upcoming milestones of SignBridge.
+      </p>
+
+      <div class="prompt-box">
+        <div class="prompt-header">
+          <span>GEMINI DISSERTATION PROMPT</span>
+          <button class="copy-btn" onclick="copyPrompt()">Copy Prompt Text</button>
+        </div>
+        <textarea id="promptText" style="width: 100%; height: 350px; border: none; background: transparent; font-family: monospace; font-size: 0.9em; resize: vertical;" readonly>
+Act as an expert Academic Advisor and Computer Science Professor. Write a comprehensive, formal Academic Project Report (Dissertation style) for a system named "SignBridge". 
+
+---
+### PROJECT OVERVIEW:
+SignBridge is a real-time, two-way translation video calling app for Deaf and Hearing users. It runs on Flutter (Dart) and natively tracks hands on Android (Kotlin) using Google MediaPipe. 
+
+### PLATFORM ARCHITECTURE DETAILS:
+1. Native Android (Kotlin): MediaPipe HandLandmarker extracts 21 coordinates per hand in real-time. Frames are sent at 15fps through a custom HandLandmarkVideoSink.
+2. Inter-process Communication: MethodChannels configure setups, and EventChannels stream raw coordinates to Dart.
+3. Dart AI Pipeline (Flutter): InferenceManager handles landmark coordinates. Points are normalized (origin shifted to wrist coordinate and scaled by hand span) and fed to an on-device TensorFlow Lite model (.tflite).
+4. Prediction Stabilizer: A debounce filter requires a class classification to remain consistent across 2 consecutive frames at >= 65% confidence before triggering a Text-to-Speech (TTS) readout.
+5. Bidirectional Calling: WebRTC (Peer-to-Peer) streams audio/video. Firebase Firestore acts as the signaling channel. An incoming call triggers a continuous haptic vibration engine to notify Deaf users.
+6. Localization: Supports English and Swahili dynamically.
+
+### REPORT STRUCTURE REQUIREMENTS:
+Write a highly detailed, professional paper covering the following chapters:
+
+Chapter 1: Introduction & Literature Review
+- Background of sign language accessibility systems.
+- Problem Statement: Bidirectional real-time calling gaps.
+- Literature Review: Compare live interpretation vs. cloud translation vs. on-device AI. Cite advantages of on-device privacy & latency.
+
+Chapter 2: System Design & Architecture
+- Provide a detailed architectural overview.
+- Explain the pipeline division: Why native Android acts purely as a coordinate producer (VideoSink -> EventChannel) while Dart manages normalized inference.
+- Explain the WebRTC signaling mechanism using Cloud Firestore.
+
+Chapter 3: AI Pipeline & Performance Optimization
+- Detail the normalization math (wrist Centering, Span Scaling).
+- Explain the PredictionStabilizer algorithm and why consecutive frame matching filters transient errors.
+- Document the frame skipping mechanism (processing every 2nd frame) to reduce CPU throttling on mobile devices.
+
+Chapter 4: Future Roadmap (2-Hand Landmark & 50+ Vocabulary Expansion)
+- Outline how the system scales to two-handed signs. Explain modifying Kotlin for 2 hands (numHands = 2) and Dart zero-padding inputs to keep a uniform 12 dimension input vector (126 coordinates total).
+- Provide a training outline for scaling the MLP model from 6 to 50 classes using a Python Keras pipeline.
+
+Write in a formal academic tone (passive voice where appropriate), using LaTeX notation for mathematical equations. Start with Chapter 1.</textarea>
+      </div>
+    </section>
+
+    <!-- SECTION 4: EXPORT OPTIONS -->
+    <section>
+      <h2>4. Printing/Exporting as PDF</h2>
+      <p>
+        To convert this document into a clean, professional PDF:
+      </p>
+      <ol>
+        <li>Open this file (<code>docs/academic_report_blueprint.html</code>) in any web browser (Chrome, Edge, or Safari).</li>
+        <li>Press <code>Ctrl + P</code> (or <code>Cmd + P</code> on Mac) to open the print dialog.</li>
+        <li>Select <strong>Save as PDF</strong> as the destination.</li>
+        <li>Under options, enable <strong>Background graphics</strong> to preserve the colors and borders, then click <strong>Save</strong>.</li>
+      </ol>
+    </section>
+  </div>
+
+  <script>
+    function copyPrompt() {
+      const copyText = document.getElementById("promptText");
+      copyText.select();
+      copyText.setSelectionRange(0, 99999); // For mobile devices
+      navigator.clipboard.writeText(copyText.value);
+      
+      const btn = document.querySelector(".copy-btn");
+      btn.innerText = "Copied!";
+      btn.style.backgroundColor = "#10b981";
+      
+      setTimeout(() => {
+        btn.innerText = "Copy Prompt Text";
+        btn.style.backgroundColor = "var(--secondary)";
+      }, 2000);
+    }
+  </script>
+</body>
+</html>

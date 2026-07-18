@@ -11,33 +11,73 @@
 
 class GestureMapperService {
   // Canonical mapping of "phrase" → "asset key under assets/gifs/<key>.gif"
+  // Expanded dictionary: map recognized label or spoken variants → canonical gifKey (same as label key)
   static const Map<String, String> _dictionary = {
     'hello': 'hello',
-    'hi': 'hello',
-    'habari': 'hello',
-    'hujambo': 'hello',
-    'thank you': 'thank_you',
-    'thanks': 'thank_you',
-    'thank_you': 'thank_you',
-    'asante': 'thank_you',
-    'help': 'help',
-    'msaada': 'help',
     'yes': 'yes',
-    'ndiyo': 'yes',
     'no': 'no',
-    'hapana': 'no',
-    'wewe': 'wewe',
-    'mimi': 'mimi',
+    'help': 'help',
+    'book': 'book',
+    'car': 'car',
+    'bus': 'bus',
+    'phone': 'phone',
+    'drink': 'drink',
+    'water': 'water',
+    'eat': 'eat',
+    'food': 'food',
+    'fire': 'fire',
+    'school': 'school',
+    'teacher': 'teacher',
+    'student': 'student',
+    'hospital': 'hospital',
+    'doctor': 'doctor',
+    'medicine': 'medicine',
+    'police': 'police',
+    'work': 'work',
+    'shop': 'shop',
+    'money': 'money',
+    'home': 'home',
+    'safe': 'safe',
+    'danger': 'danger',
+    'sleep': 'sleep',
+    'walk': 'walk',
+    'run': 'run',
+    'stop': 'stop',
+    'sit': 'sit',
+    'stand': 'stand',
+    'mother': 'mother',
+    'father': 'father',
+    'baby': 'baby',
+    'boy': 'boy',
+    'girl': 'girl',
+    'child': 'child',
+    'woman': 'woman',
+    'man': 'man',
+    'friend': 'friend',
+    'come': 'come',
+    'go': 'go',
+    'computer': 'computer',
+    'bread': 'bread',
+    'sorry': 'sorry',
+    'please': 'please',
+    'thank_you': 'thank_you',
   };
 
   /// Best-effort match for the input text.
   /// Returns null if no mapping exists (UI must handle that gracefully).
   static String? mapTextToGifKey(String text) {
     if (text.trim().isEmpty) return null;
-    final lower = text.toLowerCase().trim();
+    var lower = text.toLowerCase().trim();
 
-    // 1) Direct hit.
+    // Strip leading 'gesture.' if present
+    if (lower.startsWith('gesture.')) lower = lower.substring(8);
+    // Normalize underscores to spaces for matching
+    lower = lower.replaceAll('_', ' ').trim();
+
+    // 1) Direct hit against canonical keys (try both underscore and space forms)
     if (_dictionary.containsKey(lower)) return _dictionary[lower];
+    final underscoreKey = lower.replaceAll(' ', '_');
+    if (_dictionary.containsKey(underscoreKey)) return _dictionary[underscoreKey];
 
     // 2) Token-level scan: pick first matching word/phrase.
     final tokens = lower.split(RegExp(r'\s+'));

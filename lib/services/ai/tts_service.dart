@@ -25,11 +25,19 @@ class TTSService {
     if (!_ready) await initialize();
     if (text.trim().isEmpty) return;
 
-    // Replace underscores from gesture labels for natural speech:
-    //   "thank_you" → "thank you"
-    final clean = text.replaceAll('_', ' ');
+    // Normalize labels for natural speech:
+    //   "gesture.home" -> "home"
+    //   "thank_you" -> "thank you"
+    String normalized = text.trim();
+    if (normalized.startsWith('gesture.')) normalized = normalized.substring(8);
+    normalized = normalized.replaceAll('_', ' ').trim();
+    // Capitalize first letter for better TTS naturalness
+    if (normalized.isNotEmpty) {
+      normalized = normalized[0].toUpperCase() + (normalized.length > 1 ? normalized.substring(1) : '');
+    }
+
     await _tts.stop(); // cancel any previous utterance
-    await _tts.speak(clean);
+    await _tts.speak(normalized);
   }
 
   Future<void> stop() async => _tts.stop();

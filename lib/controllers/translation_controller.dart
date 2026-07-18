@@ -129,6 +129,7 @@ class TranslationController extends ChangeNotifier {
       if (!_clearCtrl.isClosed) _clearCtrl.add(null);
       debugPrint('[TranslationController] Gesture ended — overlay dismissed');
     }));
+
     _subs.add(_gesture.statusStream.listen(_emitStatus));
 
     _subs.add(_speech.resultStream.listen(_onSpeechResult));
@@ -184,8 +185,11 @@ class TranslationController extends ChangeNotifier {
     final String gifKey         = GestureMapperService.mapTextToGifKey(rawLabel) ?? rawLabel;
     final String translatedText = AppTranslations.t('gesture.$rawLabel', _languageCode);
 
+    // Ensure displayed/spoken text is clean (no leading 'gesture.' prefix)
+    final String cleanText = _cleanLabelText(translatedText);
+
     final msg = TranslationMessage(
-      text:     translatedText,
+      text:     cleanText,
       source:   'gesture',
       language: _languageCode,
       gifKey:   gifKey,
@@ -196,7 +200,7 @@ class TranslationController extends ChangeNotifier {
 
     _publishLocal(msg);
     if (_ttsEnabled) {
-      _tts.speak(translatedText);
+      _tts.speak(cleanText);
     }
   }
 
@@ -230,10 +234,21 @@ class TranslationController extends ChangeNotifier {
         final localText = AppTranslations.t('gesture.$effectiveGifKey', _languageCode);
         processed = TranslationMessage(
           id: msg.id,
-          text: localText,
+          text: _cleanLabelText(localText),
           source: 'gesture',
           language: _languageCode,
           gifKey: effectiveGifKey,
+          timestamp: msg.timestamp,
+          fromPeer: true,
+        );
+      } else if (msg.source == 'gesture') {
+        // No effective gifKey — sanitize whatever text we received
+        processed = TranslationMessage(
+          id: msg.id,
+          text: _cleanLabelText(msg.text),
+          source: 'gesture',
+          language: _languageCode,
+          gifKey: msg.gifKey,
           timestamp: msg.timestamp,
           fromPeer: true,
         );
@@ -262,7 +277,13 @@ class TranslationController extends ChangeNotifier {
     // Forward to peer (DataChannel) if the hook is wired.
     final outgoing = onOutgoing;
     if (outgoing != null) {
-      outgoing(json.encode(msg.toJson()));
+      // Send sanitized JSON (strip gesture. prefix in text for remote)
+      final map = msg.toJson();
+      var outgoingText = map['text'] as String? ?? '';
+      if (outgoingText.toLowerCase().startsWith('gesture.')) outgoingText = outgoingText.substring(8);
+      outgoingText = outgoingText.replaceAll('_', ' ').trim();
+      map['text'] = outgoingText;
+      outgoing(json.encode(map));
     }
   }
 
@@ -272,15 +293,28 @@ class TranslationController extends ChangeNotifier {
   }
 
   void _emitMessage(TranslationMessage msg) {
+    // Ensure text is clean before persisting / emitting / forwarding
+    final cleanText = _cleanLabelText(msg.text);
+
+    final sanitized = TranslationMessage(
+      id: msg.id,
+      text: cleanText,
+      source: msg.source,
+      language: msg.language,
+      gifKey: msg.gifKey,
+      timestamp: msg.timestamp,
+      fromPeer: msg.fromPeer,
+    );
+
     // 1) Persist
-    _history.save(msg);
+    _history.save(sanitized);
 
     // 2) Update history cache + stream (cumulative)
-    _historyCache.insert(0, msg); // newest first
+    _historyCache.insert(0, sanitized); // newest first
     _historyCtrl.add(List.unmodifiable(_historyCache));
 
     // 3) Emit live (transient)
-    _liveCtrl.add(msg);
+    _liveCtrl.add(sanitized);
   }
 
   void _emitStatus(AiStatus s) {
@@ -288,6 +322,22 @@ class TranslationController extends ChangeNotifier {
     _currentStatus = s;
     _statusCtrl.add(s);
     notifyListeners();
+  }
+
+  /// Normalize labels for display and TTS: strip leading 'gesture.' and underscores,
+  /// trim and capitalise for readability.
+  String _cleanLabelText(String txt) {
+    var t = txt.trim();
+    if (t.toLowerCase().startsWith('gesture.')) {
+      t = t.substring(8);
+    }
+    t = t.replaceAll('_', ' ').trim();
+    if (t.isEmpty) return t;
+    // Keep capitalization of translated strings intact, otherwise capitalise first char
+    if (t == t.toLowerCase()) {
+      t = t[0].toUpperCase() + (t.length > 1 ? t.substring(1) : '');
+    }
+    return t;
   }
 
   /// Simulates a local gesture result (toolbar tap injection hook).
@@ -298,9 +348,10 @@ class TranslationController extends ChangeNotifier {
 
     final String gifKey         = GestureMapperService.mapTextToGifKey(rawLabel) ?? rawLabel;
     final String translatedText = AppTranslations.t('gesture.$rawLabel', _languageCode);
+    final String cleanText      = _cleanLabelText(translatedText);
 
     final msg = TranslationMessage(
-      text:     translatedText,
+      text:     cleanText,
       source:   'gesture',
       language: _languageCode,
       gifKey:   gifKey,
@@ -308,7 +359,7 @@ class TranslationController extends ChangeNotifier {
 
     _publishLocal(msg);
     if (_ttsEnabled) {
-      _tts.speak(translatedText);
+      _tts.speak(cleanText);
     }
   }
 

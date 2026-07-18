@@ -748,25 +748,6 @@ class HandLandmarksPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (landmarks.isEmpty) return;
 
-    final paintPoint = Paint()
-      ..color = AppColors.secondary
-      ..style = PaintingStyle.fill;
-
-    final paintLine = Paint()
-      ..color = AppColors.primaryLight.withValues(alpha: 0.8)
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-
-    // MediaPipe receives the raw landscape bitmap (640×480) and rotates it internally
-    // using frame.rotation (typically 90° for front-camera portrait).
-    // The output coordinates are still in the landscape bitmap's axis order:
-    //   lm.x: 0→1 along the landscape width  → maps to the portrait VERTICAL axis (top→bottom)
-    //   lm.y: 0→1 along the landscape height → maps to the portrait HORIZONTAL axis (left→right)
-    //
-    // To display correctly on the portrait preview we must swap and mirror the axes:
-    //   screen_x = (1.0 - lm.y) * containerWidth    (landscape y, mirrored for front camera)
-    //   screen_y = lm.x * containerHeight            (landscape x maps to portrait vertical)
-
     final List<Offset> points = landmarks.map((lm) {
       final x = (1.0 - lm.y) * size.width;
       final y = (1.0 - lm.x) * size.height; // inverted: wrist → bottom, fingertips → top
@@ -774,53 +755,72 @@ class HandLandmarksPainter extends CustomPainter {
     }).toList();
 
     // Helper to draw connection line
-    void drawConnection(int from, int to) {
+    void drawConnection(int from, int to, Paint linePaint) {
       if (from < points.length && to < points.length) {
-        canvas.drawLine(points[from], points[to], paintLine);
+        canvas.drawLine(points[from], points[to], linePaint);
       }
     }
 
-    // Connect fingers to wrist
-    drawConnection(0, 1);
-    drawConnection(0, 5);
-    drawConnection(0, 9);
-    drawConnection(0, 13);
-    drawConnection(0, 17);
+    void drawHand(int startIndex, Color color) {
+      final paintP = Paint()
+        ..color = color
+        ..style = PaintingStyle.fill;
+      final paintL = Paint()
+        ..color = color.withValues(alpha: 0.8)
+        ..strokeWidth = 2.0
+        ..style = PaintingStyle.stroke;
 
-    // Connect thumb joints
-    drawConnection(1, 2);
-    drawConnection(2, 3);
-    drawConnection(3, 4);
+      // Connect fingers to wrist
+      drawConnection(startIndex + 0, startIndex + 1, paintL);
+      drawConnection(startIndex + 0, startIndex + 5, paintL);
+      drawConnection(startIndex + 0, startIndex + 9, paintL);
+      drawConnection(startIndex + 0, startIndex + 13, paintL);
+      drawConnection(startIndex + 0, startIndex + 17, paintL);
 
-    // Connect index joints
-    drawConnection(5, 6);
-    drawConnection(6, 7);
-    drawConnection(7, 8);
+      // Connect thumb joints
+      drawConnection(startIndex + 1, startIndex + 2, paintL);
+      drawConnection(startIndex + 2, startIndex + 3, paintL);
+      drawConnection(startIndex + 3, startIndex + 4, paintL);
 
-    // Connect middle joints
-    drawConnection(9, 10);
-    drawConnection(10, 11);
-    drawConnection(11, 12);
+      // Connect index joints
+      drawConnection(startIndex + 5, startIndex + 6, paintL);
+      drawConnection(startIndex + 6, startIndex + 7, paintL);
+      drawConnection(startIndex + 7, startIndex + 8, paintL);
 
-    // Connect ring joints
-    drawConnection(13, 14);
-    drawConnection(14, 15);
-    drawConnection(15, 16);
+      // Connect middle joints
+      drawConnection(startIndex + 9, startIndex + 10, paintL);
+      drawConnection(startIndex + 10, startIndex + 11, paintL);
+      drawConnection(startIndex + 11, startIndex + 12, paintL);
 
-    // Connect pinky joints
-    drawConnection(17, 18);
-    drawConnection(18, 19);
-    drawConnection(19, 20);
+      // Connect ring joints
+      drawConnection(startIndex + 13, startIndex + 14, paintL);
+      drawConnection(startIndex + 14, startIndex + 15, paintL);
+      drawConnection(startIndex + 15, startIndex + 16, paintL);
 
-    // Draw landmark points
-    for (int i = 0; i < points.length; i++) {
-      if (i == 4 || i == 8 || i == 12 || i == 16 || i == 20) {
-        paintPoint.color = Colors.tealAccent;
-        canvas.drawCircle(points[i], 3.5, paintPoint);
-      } else {
-        paintPoint.color = AppColors.secondary;
-        canvas.drawCircle(points[i], 2.5, paintPoint);
+      // Connect pinky joints
+      drawConnection(startIndex + 17, startIndex + 18, paintL);
+      drawConnection(startIndex + 18, startIndex + 19, paintL);
+      drawConnection(startIndex + 19, startIndex + 20, paintL);
+
+      // Draw landmark points
+      for (int i = 0; i < 21; i++) {
+        int idx = startIndex + i;
+        if (idx >= points.length) break;
+        if (i == 4 || i == 8 || i == 12 || i == 16 || i == 20) {
+          canvas.drawCircle(points[idx], 3.5, paintP..color = Colors.tealAccent);
+        } else {
+          canvas.drawCircle(points[idx], 2.5, paintP..color = color);
+        }
       }
+    }
+
+    // Draw first hand (indices 0-20)
+    if (points.isNotEmpty) {
+      drawHand(0, AppColors.secondary);
+    }
+    // Draw second hand (indices 21-41)
+    if (points.length >= 42) {
+      drawHand(21, Colors.blueAccent);
     }
   }
 

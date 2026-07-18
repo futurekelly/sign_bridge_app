@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class HandLandmarkerHelper private constructor(private val context: Context) {
     private var handLandmarker: HandLandmarker? = null
-    var onLandmarksDetected: ((List<Map<String, Any>>) -> Unit)? = null
+    var onLandmarksDetected: ((FloatArray) -> Unit)? = null
 
     private val frameCounter = AtomicLong(0)
     private val timestampMap = ConcurrentHashMap<Long, Long>()
@@ -40,7 +40,7 @@ class HandLandmarkerHelper private constructor(private val context: Context) {
                     .setMinHandDetectionConfidence(0.5f)
                     .setMinTrackingConfidence(0.5f)
                     .setMinHandPresenceConfidence(0.5f)
-                    .setNumHands(1)
+                    .setNumHands(2)
                     .setRunningMode(RunningMode.LIVE_STREAM)
                     .setResultListener { result, inputImage ->
                         val timestampMs = result.timestampMs()
@@ -48,28 +48,35 @@ class HandLandmarkerHelper private constructor(private val context: Context) {
                         val latencyStr = if (startTime != null) "${System.currentTimeMillis() - startTime} ms" else "unknown"
                         val landmarksList = result.landmarks()
                         val handsCount = landmarksList?.size ?: 0
-                        val landmarksCount = if (handsCount > 0) landmarksList[0].size else 0
 
+                        // Emit exactly 84 floats: 42 per hand (21 landmarks * 2 coords: x,y)
+                        val allLandmarks = FloatArray(84)
+
+                        // Add first hand (or leave as 0.0 if no hand detected)
                         if (handsCount > 0) {
-                            // Log.i("HandLandmarkerService", "Result callback invoked for timestamp $timestampMs. Hands detected: $handsCount, Landmarks: $landmarksCount, Latency: $latencyStr")
-                            val handLandmarks = landmarksList[0]
-                            // val wrist = handLandmarks[0]
-                            // val indexTip = handLandmarks[8]
-                            // Log.i("HandLandmarkerService", "Wrist: x=${String.format("%.4f", wrist.x())}, y=${String.format("%.4f", wrist.y())}, z=${String.format("%.4f", wrist.z())}")
-                            // Log.i("HandLandmarkerService", "Index Tip: x=${String.format("%.4f", indexTip.x())}, y=${String.format("%.4f", indexTip.y())}, z=${String.format("%.4f", indexTip.z())}")
-
-                            val landmarksData = handLandmarks.mapIndexed { index, landmark ->
-                                mapOf(
-                                    "id" to index,
-                                    "x" to landmark.x().toDouble(),
-                                    "y" to landmark.y().toDouble(),
-                                    "z" to landmark.z().toDouble()
-                                )
+                            val hand1 = landmarksList[0]
+                            for (index in 0 until 21) {
+                                if (index < hand1.size) {
+                                    val landmark = hand1[index]
+                                    allLandmarks[index * 2] = landmark.x()
+                                    allLandmarks[index * 2 + 1] = landmark.y()
+                                }
                             }
-                            onLandmarksDetected?.invoke(landmarksData)
-                        } else {
-                            onLandmarksDetected?.invoke(emptyList())
                         }
+
+                        // Add second hand (starts at index 42)
+                        if (handsCount > 1) {
+                            val hand2 = landmarksList[1]
+                            for (index in 0 until 21) {
+                                if (index < hand2.size) {
+                                    val landmark = hand2[index]
+                                    allLandmarks[42 + index * 2] = landmark.x()
+                                    allLandmarks[42 + index * 2 + 1] = landmark.y()
+                                }
+                            }
+                        }
+
+                        onLandmarksDetected?.invoke(allLandmarks)
                     }
                     .setErrorListener { error ->
                         Log.e("HandLandmarkerService", "MediaPipe Error: ${error.message}", error)

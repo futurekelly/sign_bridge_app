@@ -69,3 +69,10 @@ python_scripts/keypoint.csv
 python_scripts/gesture_classifier.tflite
 python_scripts/gesture_model_saved/
 *.pyc
+
+# Emulator/debug screenshots and temp files
+emulator_app.png
+emulator_screen.png
+emulator_window_dump.xml
+screenshot.png
+temp_logcat.txt

@@ -16,6 +16,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../data/models/translation_message.dart';
+import '../../services/ai/inference_manager.dart';
 
 class TranslationOverlay extends StatefulWidget {
   final Stream<TranslationMessage> liveStream;
@@ -48,12 +49,56 @@ class _TranslationOverlayState extends State<TranslationOverlay>
   late final Animation<double>   _scaleAnim;
 
   // ── Vocabulary maps ──────────────────────────────────────────
+  // Full emoji mapping for all known gesture labels (keeps room to replace with GIF keys later)
   static const Map<String, String> _gestureEmoji = {
     'hello':     '👋',
     'yes':       '👍',
     'no':        '👎',
-    'help':      '✊',
-    'thank_you': '✌️',
+    'help':      '🆘',
+    'book':      '📖',
+    'car':       '🚗',
+    'bus':       '🚌',
+    'phone':     '📱',
+    'drink':     '🥤',
+    'water':     '💧',
+    'eat':       '🍽️',
+    'food':      '🍛',
+    'fire':      '🔥',
+    'school':    '🏫',
+    'teacher':   '👨‍🏫',
+    'student':   '🎓',
+    'hospital':  '🏥',
+    'doctor':    '👨‍⚕️',
+    'medicine':  '💊',
+    'police':    '👮',
+    'work':      '💼',
+    'shop':      '🛒',
+    'money':     '💰',
+    'home':      '🏠',
+    'safe':      '🛡️',
+    'danger':    '⚠️',
+    'sleep':     '🛌',
+    'walk':      '🚶',
+    'run':       '🏃',
+    'stop':      '✋',
+    'sit':       '🪑',
+    'stand':     '🧍',
+    'mother':    '👩',
+    'father':    '👨',
+    'baby':      '👶',
+    'boy':       '👦',
+    'girl':      '👧',
+    'child':     '🧒',
+    'woman':     '👩',
+    'man':       '👨',
+    'friend':    '🤝',
+    'come':      '👈',
+    'go':        '👉',
+    'computer':  '💻',
+    'bread':     '🍞',
+    'sorry':     '🙏',
+    'please':    '🙏',
+    'thank_you': '🙏',
   };
 
   static const Map<String, String> _speechEmoji = {
@@ -105,7 +150,11 @@ class _TranslationOverlayState extends State<TranslationOverlay>
     // gifKey is the most reliable — already normalised by GestureMapperService
     if (msg.gifKey != null && msg.gifKey!.isNotEmpty) return msg.gifKey;
 
-    final lower = msg.text.toLowerCase().trim();
+    // Normalize text: strip leading 'gesture.' if present, underscores -> spaces
+    var lower = msg.text.toLowerCase().trim();
+    if (lower.startsWith('gesture.')) lower = lower.substring(8);
+    lower = lower.replaceAll('_', ' ').trim();
+
     if (_keyMap.containsKey(lower)) return _keyMap[lower];
 
     // Substring scan (handles "thank you" inside longer STT phrases)
@@ -123,18 +172,30 @@ class _TranslationOverlayState extends State<TranslationOverlay>
     final emoji     = isGesture ? (_gestureEmoji[key] ?? '🤟') : (_speechEmoji[key] ?? '🎤');
     final bilingual = _bilingual[key] ?? [msg.text.replaceAll('_', ' '), ''];
 
+    // Get confidence from InferenceManager if it's a gesture
+    double confidence = 0.0;
+    try {
+      final inference = InferenceManager();
+      if (isGesture && inference.prediction == key) {
+        confidence = inference.confidence;
+      }
+    } catch (_) {}
+
     setState(() {
       _emoji   = emoji;
       _enText  = bilingual[0];
       _swText  = bilingual.length > 1 ? bilingual[1] : '';
       _source  = msg.source;
       _visible = true;
+      _conf    = confidence;
     });
 
     _animCtrl.forward(from: 0.0);
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 4), _dismiss);
   }
+
+  double _conf = 0.0;
 
   void _dismiss() {
     _animCtrl.reverse().then((_) {
@@ -229,6 +290,18 @@ class _TranslationOverlayState extends State<TranslationOverlay>
                             fontSize:   15,
                             fontWeight: FontWeight.w400,
                             height:     1.2,
+                          ),
+                        ),
+                      if (_source == 'gesture' && _conf > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Confidence: ${(_conf * 100).toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              color: _conf > 0.8 ? Colors.greenAccent : Colors.orangeAccent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                     ],

@@ -66,6 +66,12 @@ class InferenceManager extends ChangeNotifier {
   String _prediction = '';
   String get prediction => _prediction;
 
+  double _confidence = 0.0;
+  double get confidence => _confidence;
+
+  DateTime? _lastInferenceTime;
+  static const int _inferenceIntervalMs = 100; // Throttle to 10 FPS
+
   static const EventChannel _channel = EventChannel('com.example.sign_bridge/landmarks');
   StreamSubscription? _landmarkSub;
 
@@ -74,48 +80,15 @@ class InferenceManager extends ChangeNotifier {
   int _frameCount = 0;
   DateTime? _fpsStartTime;
 
-  /// Normalizes 21 2D hand landmarks matching the Python dataset recording logic.
-  /// Performs wrist translation (landmark 0) and max-distance scaling to output 42 floats.
-  List<double> normalizeLandmarks(List<HandLandmark> landmarks, {bool isLeft = false}) {
-    if (landmarks.isEmpty) return [];
-
-    // 1. Base translation relative to wrist (landmark 0)
-    final double basePointerX = landmarks[0].x;
-    final double basePointerY = landmarks[0].y;
-
-    final List<double> translatedX = [];
-    final List<double> translatedY = [];
-
-    for (final lm in landmarks) {
-      double relX = lm.x - basePointerX;
-      double relY = lm.y - basePointerY;
-
-      // 2. Left-hand horizontal flip trick (mirror x to look like right hand)
-      if (isLeft) {
-        relX = relX * -1.0;
-      }
-
-      translatedX.add(relX);
-      translatedY.add(relY);
+  /// Converts native 84-float array (raw MediaPipe x,y coordinates) for model inference.
+  /// The model was trained on raw MediaPipe x,y values (without normalization).
+  /// Returns exactly 84 floats: 42 per hand (21 landmarks * 2 coords: x,y).
+  List<double> processRawLandmarks(List<double> rawFloats) {
+    if (rawFloats.length != 84) {
+      throw ArgumentError(
+          'Invalid input length: expected exactly 84 raw coordinates, but received ${rawFloats.length}.');
     }
-
-    // 3. Scale landmarks by maximum absolute coordinate value
-    double maxVal = 0.0;
-    for (int i = 0; i < landmarks.length; i++) {
-      final double absX = translatedX[i].abs();
-      final double absY = translatedY[i].abs();
-      if (absX > maxVal) maxVal = absX;
-      if (absY > maxVal) maxVal = absY;
-    }
-
-    // 4. Flatten to 1D array of 42 parameters
-    final List<double> normalized = [];
-    for (int i = 0; i < landmarks.length; i++) {
-      normalized.add(maxVal != 0 ? (translatedX[i] / maxVal) : 0.0);
-      normalized.add(maxVal != 0 ? (translatedY[i] / maxVal) : 0.0);
-    }
-
-    return normalized;
+    return rawFloats;
   }
 
   /// Loads the TFLite model and label text map once into memory.
@@ -152,12 +125,12 @@ class InferenceManager extends ChangeNotifier {
     }
   }
 
-  /// Runs gesture classification inference on exactly 42 normalized landmark float coordinates.
+  /// Runs gesture classification inference on exactly 84 raw landmark float coordinates.
   PredictionResult predict(List<double> landmarks) {
     // Validate input length
-    if (landmarks.length != 42) {
+    if (landmarks.length != 84) {
       throw ArgumentError(
-          'Invalid input length: expected exactly 42 landmark coordinates, but received ${landmarks.length}.');
+          'Invalid input length: expected exactly 84 landmark coordinates, but received ${landmarks.length}.');
     }
 
     if (!_isInitialized || _interpreter == null) {
@@ -167,12 +140,12 @@ class InferenceManager extends ChangeNotifier {
 
     final stopwatch = Stopwatch()..start();
 
-    // Prepare input tensor of shape [1, 42]
+    // Prepare input tensor of shape [1, 84]
     final input = [landmarks];
 
-    // Prepare output tensor of shape [1, 5]
+    // Prepare output tensor of shape [1, num_classes]
     final output = List.generate(
-        1, (_) => List<double>.filled(_labels.isNotEmpty ? _labels.length : 5, 0.0));
+        1, (_) => List<double>.filled(_labels.isNotEmpty ? _labels.length : 47, 0.0));
 
     // Execute TFLite model inference
     _interpreter!.run(input, output);
@@ -259,12 +232,12 @@ class InferenceManager extends ChangeNotifier {
     );
   }
 
-  /// Debug method to verify TFLite execution by feeding a dummy 42-element float array.
+  /// Debug method to verify TFLite execution by feeding a dummy 84-element float array.
   Future<PredictionResult> runDummyPrediction() async {
     if (!_isInitialized) {
       await initialize();
     }
-    final dummyLandmarks = List<double>.filled(42, 0.0);
+    final dummyLandmarks = List<double>.filled(84, 0.0);
     final result = predict(dummyLandmarks);
     debugPrint('[InferenceManager] Debug dummy prediction executed successfully: $result');
     return result;
@@ -284,6 +257,17 @@ class InferenceManager extends ChangeNotifier {
     _landmarkLatency = 0;
     _inferenceLatency = 0;
     _imageSizeKb = 0;
+
+    // Log stabilized predictions and gesture end events for runtime debugging
+    stabilizer.stablePredictionStream.listen((res) {
+      debugPrint('[InferenceManager] Stabilized label: ${res.label} (${(res.confidence * 100).toStringAsFixed(1)}%)');
+    });
+    stabilizer.gestureEndStream.listen((_) {
+      debugPrint('[InferenceManager] Gesture ended (stabilizer)');
+      // Clear UI prediction when stabilizer reports gesture end
+      _prediction = '';
+      notifyListeners();
+    });
 
     _landmarkSub?.cancel();
     _landmarkSub = _channel.receiveBroadcastStream().listen((data) {
@@ -322,30 +306,57 @@ class InferenceManager extends ChangeNotifier {
         }
       }
 
-      final List<dynamic> list = data as List<dynamic>;
-      final List<HandLandmark> landmarks = list.map((item) {
-        final Map<dynamic, dynamic> map = item as Map<dynamic, dynamic>;
-        return HandLandmark(
-          map['id'] as int,
-          (map['x'] as num).toDouble(),
-          (map['y'] as num).toDouble(),
-          (map['z'] as num).toDouble(),
-        );
-      }).toList();
+      // ── Inference Throttling (10 FPS) ──
+      final timeSinceLast = _lastInferenceTime == null 
+          ? _inferenceIntervalMs + 1 
+          : now.difference(_lastInferenceTime!).inMilliseconds;
+      
+      final shouldRunInference = timeSinceLast >= _inferenceIntervalMs;
 
-      _currentLandmarks = landmarks;
-
-      if (landmarks.isNotEmpty) {
-        final normalized = normalizeLandmarks(landmarks);
-        if (normalized.isNotEmpty) {
-          final result = predict(normalized);
-          _prediction = result.label;
-          stabilizer.processPrediction(result);
-        }
-      } else {
-        _prediction = '';
+      // Consume native stream: Float32List of length 84 (raw x,y coordinates)
+      final Float32List rawFloats = data as Float32List;
+      
+      if (rawFloats.length != 84) {
+        debugPrint('[InferenceManager] Invalid data length: ${rawFloats.length}');
+        return;
       }
-      notifyListeners();
+
+      final List<HandLandmark> visualLandmarks = [];
+      for (int i = 0; i < 42; i++) {
+        final double x = rawFloats[i * 2];
+        final double y = rawFloats[i * 2 + 1];
+        visualLandmarks.add(HandLandmark(i, x, y, 0.0));
+      }
+
+      _currentLandmarks = visualLandmarks;
+
+      // If the input is all zeros → no hands present.
+      final bool allZeros = rawFloats.every((v) => v == 0.0);
+      if (allZeros) {
+        if (shouldRunInference) {
+          try {
+            stabilizer.reset();
+          } catch (_) {}
+          _prediction = '';
+          _confidence = 0.0;
+          _lastInferenceTime = now;
+          notifyListeners();
+        }
+        return;
+      }
+
+      if (shouldRunInference && rawFloats.length == 84) {
+        final result = predict(rawFloats);
+        _prediction = result.label;
+        _confidence = result.confidence;
+        _lastInferenceTime = now;
+        debugPrint('[InferenceManager] Predicted: ${result.label} (${(result.confidence * 100).toStringAsFixed(1)}%)');
+        stabilizer.processPrediction(result);
+        notifyListeners();
+      } else if (!shouldRunInference) {
+        // Just update landmarks for visual smoothness even if not inferring
+        notifyListeners();
+      }
     } catch (e) {
       debugPrint('[InferenceManager] Error processing native landmarks: $e');
     }

@@ -32,7 +32,18 @@ class AccessibilityController extends ChangeNotifier {
   bool get visualNotifications => _visualNotifications;
   String get languageCode => _languageCode;
   
-  bool get ttsEnabled => _ttsEnabled;
+  /// Whether this device should speak translations aloud.
+  ///
+  /// TTS is the Deaf -> Hearing direction, and it belongs on the HEARING device: when the
+  /// deaf user signs, the word is voiced on the peer's phone (TranslationController
+  /// .handleIncomingPeerJson). The deaf device repeating its owner's own sign back at them
+  /// is sound they have no use for, so a deaf device never speaks.
+  ///
+  /// This is derived from the role rather than read straight from the stored preference,
+  /// because the old default wrote `ttsEnabled: true` into Hive for the deaf role. Changing
+  /// only the default in [setRole] would therefore leave every already-configured deaf
+  /// device still talking, including the two this is being fixed for.
+  bool get ttsEnabled => _ttsEnabled && !isDeaf;
   bool get vibrationEnabled => _vibrationEnabled;
   bool get flashlightEnabled => _flashlightEnabled;
 
@@ -55,7 +66,9 @@ class AccessibilityController extends ChangeNotifier {
       _captionFontSize = 18.0;
       _vibrationEnabled = true;
       _flashlightEnabled = true;
-      _ttsEnabled = true; // Keep TTS voice enabled by default for presentation
+      // The deaf device stays silent: their signs are spoken on the hearing peer's phone,
+      // not on the phone they are holding. See the ttsEnabled getter.
+      _ttsEnabled = false;
     } else if (role == UserRole.hearing) {
       _captionsEnabled = false;
       _visualNotifications = false;

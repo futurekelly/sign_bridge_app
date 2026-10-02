@@ -6,6 +6,11 @@
 <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+<!-- Needed by VibrationService. Without it the app can still call HapticFeedback.vibrate(),
+     the system's ~50ms UI tick, but cannot ask the platform vibrator for a pattern,
+     duration or amplitude, and a deaf user has to be able to feel the difference between
+     an incoming call and an arriving message through a pocket. -->
+<uses-permission android:name="android.permission.VIBRATE" />
 <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
 <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 <uses-feature android:name="android.hardware.camera" android:required="false" />

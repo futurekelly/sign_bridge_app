@@ -12,6 +12,7 @@ import '../../controllers/translation_controller.dart';
 import '../../core/enums.dart';
 import '../../services/ai/inference_manager.dart';
 import '../../services/ai/performance_monitor.dart';
+import '../../services/accessibility/vibration_service.dart';
 import '../../data/models/translation_message.dart';
 
 import '../../core/theme.dart';
@@ -81,8 +82,12 @@ class _CallViewState extends State<_CallView> {
     if (!msg.fromPeer) return;
 
     final a11y = Provider.of<AccessibilityController>(context, listen: false);
-    if (a11y.vibrationEnabled) {
-      HapticFeedback.vibrate();
+    // Deaf-only channel. Gated on the role, not just on the preference, so a hearing device
+    // cannot start buzzing because the toggle was left on from an earlier role. The short
+    // double-tick is deliberately unlike the incoming-call pattern, so the deaf user can
+    // tell "a message arrived" from "someone is calling" without looking.
+    if (a11y.isDeaf && a11y.vibrationEnabled) {
+      VibrationService.instance.messageAlert();
     }
     if (a11y.flashlightEnabled) {
       setState(() => _showFlash = true);

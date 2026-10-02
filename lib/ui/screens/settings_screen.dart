@@ -263,13 +263,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: a11y.t('settings.notifications'),
             icon: Icons.notifications_outlined,
             children: [
-              SwitchListTile(
-                title: Text(a11y.t('settings.tts_enabled')),
-                subtitle: Text(a11y.t('settings.tts_desc')),
-                value: a11y.ttsEnabled,
-                onChanged: a11y.setTtsEnabled,
-                activeTrackColor: AppColors.primary,
-              ),
+              // Hidden on a deaf device: TTS is the Deaf -> Hearing direction, so a deaf
+              // device never speaks (see AccessibilityController.ttsEnabled). Leaving the
+              // switch visible would offer a setting that cannot take effect -- it would
+              // read as off and refuse to turn on.
+              if (!a11y.isDeaf)
+                SwitchListTile(
+                  title: Text(a11y.t('settings.tts_enabled')),
+                  subtitle: Text(a11y.t('settings.tts_desc')),
+                  value: a11y.ttsEnabled,
+                  onChanged: a11y.setTtsEnabled,
+                  activeTrackColor: AppColors.primary,
+                ),
               SwitchListTile(
                 title: Text(a11y.t('settings.vibration')),
                 subtitle: Text(a11y.t('settings.vibration_desc')),

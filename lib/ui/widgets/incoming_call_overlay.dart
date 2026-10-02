@@ -84,7 +84,7 @@ class _IncomingCallOverlayWidgetState extends State<_IncomingCallOverlayWidget>
     super.initState();
     
     final a11y = context.read<AccessibilityController>();
-    if (a11y.vibrationEnabled) {
+    if (a11y.isDeaf && a11y.vibrationEnabled) {
       VibrationService.instance.startIncomingCallVibration();
     }
     _startFlashlightAlerts(a11y);

@@ -29,11 +29,13 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        ndk {
-            abiFilters.add("arm64-v8a")
-            abiFilters.add("armeabi-v7a")
-            abiFilters.add("x86_64")
-        }
+        // No abiFilters here on purpose. Hardcoding them makes Gradle refuse to configure
+        // the `--split-per-abi` build outright:
+        //   "Conflicting configuration : 'armeabi-v7a,arm64-v8a,x86_64' in ndk abiFilters
+        //    cannot be present when splits abi filters are set"
+        // Flutter already picks the ABI set itself: a plain `flutter build apk` produces a
+        // fat APK with arm64-v8a + armeabi-v7a + x86_64, and `--split-per-abi` produces one
+        // APK per ABI. Leaving this to Flutter gives both, without the conflict.
     }
 
     buildTypes {
@@ -65,7 +67,21 @@ flutter {
 dependencies {
     compileOnly("io.github.webrtc-sdk:android:144.7559.01")
     implementation("com.google.mediapipe:tasks-vision:0.10.26")
-    
-    // 🆕 Required for GRU models with Select TF Ops (Flex Delegate)
-    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1")
+
+    // REMOVED: org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1 (Flex delegate)
+    //
+    // It shipped libtensorflowlite_flex_jni.so at 68,177,576 bytes for arm64-v8a -- larger
+    // than every other file in the APK put together (libflutter 11MB, mediapipe 14MB,
+    // webrtc 12MB). It was added for a GRU model with Select TF ops, and that model is not
+    // in the build: InferenceManager.initialize() asks for
+    // assets/models/gesture_model_gru.tflite, which does not exist, so the load always
+    // throws and always falls back to the dense model.
+    //
+    // Measured, not assumed -- see diagnostics/verify_no_flex_ops.py. The deployed
+    // gesture_model_dense.tflite contains exactly three ops, FULLY_CONNECTED, SOFTMAX and
+    // DELEGATE, and no Flex op. Only gesture_model_gru_experimental.tflite needs Flex
+    // (FlexTensorListReserve / FlexTensorListStack / WHILE), and nothing loads it.
+    //
+    // RESTORE THIS LINE if a model with Flex ops is ever actually deployed. Its absence
+    // shows up at runtime as an interpreter that fails to build, not as a compile error.
 }

@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -10,7 +11,7 @@ import '../../controllers/accessibility_controller.dart';
 import '../../controllers/translation_controller.dart';
 import '../../core/enums.dart';
 import '../../services/ai/inference_manager.dart';
-import '../../services/ai/landmark_processor.dart';
+import '../../services/ai/performance_monitor.dart';
 import '../../data/models/translation_message.dart';
 
 import '../../core/theme.dart';
@@ -28,6 +29,7 @@ class CallScreen extends StatelessWidget {
     final args = ModalRoute.of(context)?.settings.arguments as CallArgs?;
     final langCode = context.read<AccessibilityController>().languageCode;
     final ttsEnabled = context.read<AccessibilityController>().ttsEnabled;
+    final role = context.read<AccessibilityController>().role;
 
     return ChangeNotifierProvider(
       create: (_) {
@@ -35,9 +37,9 @@ class CallScreen extends StatelessWidget {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (args != null) {
             if (args.role == CallRole.caller) {
-              c.startAsCaller(args.callId, args.peerUid, languageCode: langCode, ttsEnabled: ttsEnabled);
+              c.startAsCaller(args.callId, args.peerUid, languageCode: langCode, ttsEnabled: ttsEnabled, role: role);
             } else {
-              c.startAsCallee(args.callId, args.peerUid, languageCode: langCode, ttsEnabled: ttsEnabled);
+              c.startAsCallee(args.callId, args.peerUid, languageCode: langCode, ttsEnabled: ttsEnabled, role: role);
             }
           }
         });
@@ -61,6 +63,10 @@ class _CallViewState extends State<_CallView> {
   StreamSubscription? _liveMessageSub;
   bool _showFlash = false;
 
+  // Hearing user's push-to-talk mic state. STT starts live via start(),
+  // so mic begins ON; the button lets the hearing user mute/unmute it.
+  bool _micOn = true;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -71,6 +77,9 @@ class _CallViewState extends State<_CallView> {
   }
 
   void _onIncomingMessage(TranslationMessage msg) {
+    // Only alert for messages FROM the remote peer, not the local user's own gestures/speech.
+    if (!msg.fromPeer) return;
+
     final a11y = Provider.of<AccessibilityController>(context, listen: false);
     if (a11y.vibrationEnabled) {
       HapticFeedback.vibrate();
@@ -300,9 +309,11 @@ class _CallViewState extends State<_CallView> {
                     controller.translation.simulateLocalGesture('thank_you');
                   }
                 },
-                child: _LocalPreview(
-                  renderer: webrtc.localRenderer,
-                  showDebug: _showDebugPanel,
+                child: RepaintBoundary(
+                  child: _LocalPreview(
+                    renderer: webrtc.localRenderer,
+                    showDebug: _showDebugPanel,
+                  ),
                 ),
               ),
             ),
@@ -437,6 +448,58 @@ class _CallViewState extends State<_CallView> {
               ),
 
 
+            // Floating Hearing Toolbar (Hearing / Both only)
+            // Backward communication: the hearing user speaks (live mic) OR taps
+            // a quick phrase → it's captioned+emoji'd on the deaf peer's screen
+            // via the WebRTC DataChannel. Positioned above the deaf toolbar slot.
+            if (role == UserRole.hearing || role == UserRole.both)
+              Positioned(
+                bottom: 90,
+                left: 16,
+                right: 16,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.70),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: Colors.white12, width: 1.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildMicButton(controller),
+                        const SizedBox(width: 8),
+                        Container(width: 1, height: 34, color: Colors.white12),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildQuickPhraseButton(controller, 'Habari', '👋'),
+                                const SizedBox(width: 6),
+                                _buildQuickPhraseButton(controller, 'Asante', '🙏'),
+                                const SizedBox(width: 6),
+                                _buildQuickPhraseButton(controller, 'Yes', '👍'),
+                                const SizedBox(width: 6),
+                                _buildQuickPhraseButton(controller, 'No', '👎'),
+                                const SizedBox(width: 6),
+                                _buildQuickPhraseButton(controller, 'Help', '✊'),
+                                const SizedBox(width: 6),
+                                _buildQuickPhraseButton(controller, 'Sorry', '🙇'),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+
             // Bottom controls
             Align(
               alignment: Alignment.bottomCenter,
@@ -476,6 +539,77 @@ class _CallViewState extends State<_CallView> {
                 style: const TextStyle(
                   color:      Colors.white,
                   fontSize:   10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Hearing-user backward-comms controls ──
+
+  /// Push-to-talk mic toggle. Mutes/unmutes the live STT so the hearing user
+  /// controls when their speech is captioned on the deaf peer's screen.
+  Widget _buildMicButton(CallController controller) {
+    return Material(
+      color: _micOn
+          ? Colors.teal.withValues(alpha: 0.85)
+          : Colors.white.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          final next = !_micOn;
+          setState(() => _micOn = next);
+          controller.translation.setMicListening(next);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_micOn ? Icons.mic : Icons.mic_off,
+                  color: Colors.white, size: 24),
+              const SizedBox(height: 2),
+              Text(
+                _micOn ? 'Live' : 'Muted',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A tap-to-speak phrase chip. Injects the phrase as a local speech result,
+  /// which publishes locally AND forwards to the deaf peer via DataChannel.
+  Widget _buildQuickPhraseButton(CallController controller, String phrase, String emoji) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => controller.translation.simulateLocalSpeech(phrase),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 24)),
+              const SizedBox(height: 2),
+              Text(
+                phrase,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -606,8 +740,11 @@ class _LocalPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.watch<CallController>();
-    final inference = controller.inferenceManager;
+    // OPTIMIZED: Use select to only rebuild this widget when InferenceManager itself changes, 
+    // not when other CallController fields change.
+    final inference = context.select<CallController, InferenceManager>((c) => c.inferenceManager);
+    final role = context.read<AccessibilityController>().role;
+    final showLandmarks = role == UserRole.deaf || role == UserRole.both;
 
     return Container(
       width: 110, height: 160,
@@ -623,16 +760,17 @@ class _LocalPreview extends StatelessWidget {
             child: RTCVideoView(renderer, mirror: true,
                 objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
           ),
-          Positioned.fill(
-            child: ListenableBuilder(
-              listenable: inference,
-              builder: (context, _) {
-                return CustomPaint(
-                  painter: HandLandmarksPainter(landmarks: inference.currentLandmarks),
-                );
-              },
+          if (showLandmarks)
+            Positioned.fill(
+              child: ListenableBuilder(
+                listenable: inference,
+                builder: (context, _) {
+                  return CustomPaint(
+                    painter: HandLandmarksPainter(landmarks: inference.currentLandmarks),
+                  );
+                },
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -647,8 +785,9 @@ class _AiDebugOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: inference,
+      listenable: Listenable.merge([inference, PerformanceMonitor.instance]),
       builder: (context, _) {
+        final perf = PerformanceMonitor.instance;
         // Mocking stable/realistic CPU & memory values for skeleton reporting:
         // CPU load of the frame capture loop is low on modern devices (~4-8% average overhead)
         final cpuMock = inference.isProcessing ? 4.5 + Random().nextDouble() * 2.0 : 0.0;
@@ -659,7 +798,7 @@ class _AiDebugOverlay extends StatelessWidget {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
-              width: 210,
+              width: 230,
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.65),
                 borderRadius: BorderRadius.circular(16),
@@ -697,13 +836,14 @@ class _AiDebugOverlay extends StatelessWidget {
                     ],
                   ),
                   const Divider(color: Colors.white12, height: 12, thickness: 1),
-                  _buildStatRow('Processing Rate', '${inference.fps.toStringAsFixed(1)} FPS'),
-                  _buildStatRow('Frame Size', '${inference.imageSizeKb} KB'),
-                  _buildStatRow('Landmark Latency', '${inference.landmarkLatency} ms'),
-                  _buildStatRow('Classifier Latency', '${inference.inferenceLatency} ms'),
+                  _buildStatRow('Inference Rate', '${inference.fps.toStringAsFixed(1)} FPS'),
+                  _buildStatRow('Inference Latency', '${inference.inferenceLatency} ms'),
+                  _buildStatRow('ICE Sync Time', '${perf.iceConnectionTimeMs} ms'),
+                  _buildStatRow('E2E (Sign-to-Voice)', '${perf.avgE2ELatencyMs.round()} ms', valueColor: Colors.tealAccent),
+                  _buildStatRow('Engine Type', inference.useTemporalModel ? 'GRU (Temporal)' : 'Dense (Backup)'),
                   _buildStatRow('Est. CPU Overhead', '${cpuMock.toStringAsFixed(1)}%'),
                   _buildStatRow('Est. Memory', '${memMock.toStringAsFixed(1)} MB'),
-                  _buildStatRow('Prediction', inference.prediction.isEmpty ? 'None' : inference.prediction.toUpperCase(), valueColor: Colors.tealAccent),
+                  _buildStatRow('Current Prediction', inference.prediction.isEmpty ? 'None' : inference.prediction.toUpperCase(), valueColor: Colors.tealAccent),
                 ],
               ),
             ),
@@ -740,24 +880,41 @@ class _AiDebugOverlay extends StatelessWidget {
 
 // ── Hand Landmarks Painter ──
 class HandLandmarksPainter extends CustomPainter {
-  final List<HandLandmark> landmarks;
+  final Float32List? landmarks;
 
   HandLandmarksPainter({required this.landmarks});
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (landmarks.isEmpty) return;
+    final lms = landmarks;
+    if (lms == null || lms.isEmpty) return;
 
-    final List<Offset> points = landmarks.map((lm) {
-      final x = (1.0 - lm.y) * size.width;
-      final y = (1.0 - lm.x) * size.height; // inverted: wrist → bottom, fingertips → top
-      return Offset(x, y);
-    }).toList();
+    // Convert raw coordinates to screen offsets
+    final List<Offset> points = [];
+    for (int i = 0; i < lms.length / 2; i++) {
+      final lx = lms[i * 2];
+      final ly = lms[i * 2 + 1];
+      if (lx == 0.0 && ly == 0.0) {
+        points.add(Offset.zero);
+      } else {
+        // The native side now turns the capture buffer upright before MediaPipe ever sees
+        // it, so the landmarks arrive in the same frame as the picture: x across, y down,
+        // fingers pointing up. The old swap-and-invert existed only to undo the landscape
+        // buffer, and keeping it here is what laid the hand on its side after that fix.
+        //
+        // The horizontal flip stays: the local preview renders with `mirror: true` (see
+        // _LocalPreview) while MediaPipe measures the unmirrored buffer, so screen x is
+        // the mirror of landmark x. y needs nothing -- both are measured downwards.
+        points.add(Offset((1.0 - lx) * size.width, ly * size.height));
+      }
+    }
 
     // Helper to draw connection line
     void drawConnection(int from, int to, Paint linePaint) {
       if (from < points.length && to < points.length) {
-        canvas.drawLine(points[from], points[to], linePaint);
+        if (points[from] != Offset.zero && points[to] != Offset.zero) {
+          canvas.drawLine(points[from], points[to], linePaint);
+        }
       }
     }
 
@@ -805,7 +962,8 @@ class HandLandmarksPainter extends CustomPainter {
       // Draw landmark points
       for (int i = 0; i < 21; i++) {
         int idx = startIndex + i;
-        if (idx >= points.length) break;
+        if (idx >= points.length || points[idx] == Offset.zero) continue;
+
         if (i == 4 || i == 8 || i == 12 || i == 16 || i == 20) {
           canvas.drawCircle(points[idx], 3.5, paintP..color = Colors.tealAccent);
         } else {

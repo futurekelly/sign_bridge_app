@@ -153,6 +153,7 @@ class AppTranslations {
       'nav.history': 'History',
       'nav.learn': 'Learn',
       'nav.settings': 'Settings',
+      'nav.logout': 'Logout',
 
       // Gestures
       'gesture.hello': 'Hello',
@@ -347,6 +348,7 @@ class AppTranslations {
       'nav.history': 'Historia',
       'nav.learn': 'Jifunze',
       'nav.settings': 'Mipangilio',
+      'nav.logout': 'Toka',
 
       // Gestures
       'gesture.hello': 'Habari',

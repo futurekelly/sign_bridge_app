@@ -39,6 +39,7 @@ dependencies:
 
   # 🆕 Upgrade — UI + Learning
   url_launcher: ^6.2.5           # Open PDF resources externally
+  torch_light: ^1.1.0            # Real LED torch for deaf incoming-call alerts
 
 dev_dependencies:
   flutter_test:

@@ -17,7 +17,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
@@ -41,13 +41,19 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            
+            // 🚨 DEMO SAFETY FIX: Disable minification to prevent MediaPipe/TFLite crashes
+            // This ensures all classes are preserved exactly as they are in debug mode.
+            isMinifyEnabled = false
+            isShrinkResources = false
+
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
     packaging {
         jniLibs {
             useLegacyPackaging = true
-            excludes.add("lib/x86/**")
         }
     }
 }
@@ -59,4 +65,7 @@ flutter {
 dependencies {
     compileOnly("io.github.webrtc-sdk:android:144.7559.01")
     implementation("com.google.mediapipe:tasks-vision:0.10.26")
+    
+    // 🆕 Required for GRU models with Select TF Ops (Flex Delegate)
+    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1")
 }

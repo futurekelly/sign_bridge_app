@@ -6,6 +6,7 @@ import '../../core/routes.dart';
 import '../../core/theme.dart';
 import '../../core/spacing.dart';
 import '../../services/accessibility/vibration_service.dart';
+import '../../services/accessibility/torch_service.dart';
 import '../../controllers/accessibility_controller.dart';
 
 class IncomingCallOverlay {
@@ -100,6 +101,10 @@ class _IncomingCallOverlayWidgetState extends State<_IncomingCallOverlayWidget>
 
   void _startFlashlightAlerts(AccessibilityController a11y) {
     if (!a11y.flashlightEnabled) return;
+    // Real LED torch strobe (camera is idle on the incoming-call screen, so we
+    // can own the flash). Silently no-ops if the device has no torch.
+    TorchService.instance.startIncomingCallStrobe();
+    // On-screen white flash as a visual companion / fallback.
     _flashTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
       if (mounted) {
         setState(() => _showFlash = true);
@@ -115,6 +120,7 @@ class _IncomingCallOverlayWidgetState extends State<_IncomingCallOverlayWidget>
   @override
   void dispose() {
     VibrationService.instance.stopVibration();
+    TorchService.instance.stop();
     _flashTimer?.cancel();
     _pulseController.dispose();
     super.dispose();

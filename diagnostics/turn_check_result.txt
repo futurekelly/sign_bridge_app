@@ -1,0 +1,9 @@
+TURN relay credential check — 2026-09-29T10:20:11.529Z
+
+--- OLD: what the phones actually run ---
+openrelay.metered.ca:80        REJECTED — server refused the credentials (401 again)
+openrelay.metered.ca:443       REJECTED — server refused the credentials (401 again)
+
+--- NEW: what the repo fix uses ---
+standard.relay.metered.ca:80   200 Allocate success relay=188.245.177.56:53188
+standard.relay.metered.ca:443  200 Allocate success relay=188.245.177.56:36859

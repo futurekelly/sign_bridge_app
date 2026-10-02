@@ -9,6 +9,7 @@ import '../../controllers/accessibility_controller.dart';
 import '../../core/enums.dart';
 import '../../core/theme.dart';
 import '../../core/spacing.dart';
+import '../../core/routes.dart';
 import '../../services/auth/auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -328,6 +329,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         SnackBar(content: Text(a11y.t('common.error'))),
                       );
                     }
+                  }
+                },
+              ),
+              const Divider(height: 32),
+              ListTile(
+                leading: const Icon(Icons.logout, color: AppColors.error),
+                title: Text(a11y.t('nav.logout'), style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+                onTap: () async {
+                  await _auth.signOut();
+                  if (context.mounted) {
+                    Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
                   }
                 },
               ),

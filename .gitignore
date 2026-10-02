@@ -76,3 +76,18 @@ emulator_screen.png
 emulator_window_dump.xml
 screenshot.png
 temp_logcat.txt
+
+# Local release APKs, kept as an on-phone rollback safety net (~85MB each).
+# Release builds belong on a GitHub Release, not in git history.
+/backup_apk/
+
+# Raw logcat captures. They contain the signed-in Firebase UID.
+diag_*.txt
+
+# Throwaway model experiments. The ONLY deployed model is
+#   assets/models/gesture_model_dense.tflite   (7472 B, md5 ac621f9c)
+# Beware: gesture_model_dense.tflite.bak is NOT a backup of it -- it is the 64KB
+# 47-class WLASL model under a misleading name, and cannot serve as a rollback.
+assets/models/*.bak
+assets/models/*_experimental.tflite
+diagnostics/*.tflite

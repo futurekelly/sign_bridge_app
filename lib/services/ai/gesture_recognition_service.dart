@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../core/enums.dart';
 import '../../data/models/translation_message.dart';
-import 'landmark_processor.dart';
 import 'inference_manager.dart';
 
 class GestureRecognitionService {
@@ -79,10 +78,10 @@ class GestureRecognitionService {
   ///
   /// Note: Real-time inference is now handled by InferenceManager loop.
   /// This method is kept for legacy compatibility if needed.
-  Future<String> classifyGesture(List<HandLandmark> landmarks, {required Function(int latencyMs) onLatencyMeasured}) async {
+  Future<String> classifyGesture(Float32List? landmarks, {required Function(int latencyMs) onLatencyMeasured}) async {
     final stopwatch = Stopwatch()..start();
 
-    if (landmarks.isEmpty) {
+    if (landmarks == null || landmarks.isEmpty) {
       stopwatch.stop();
       onLatencyMeasured(0);
       return '';

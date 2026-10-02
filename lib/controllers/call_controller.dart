@@ -22,12 +22,14 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../services/auth/auth_service.dart';
 import '../services/webrtc/webrtc_service.dart';
 import '../services/webrtc/signaling_service.dart';
+import '../core/enums.dart';
 import '../core/utils/permissions.dart';
 import '../data/models/recent_call.dart';
 import '../data/repositories/recent_calls_repository.dart';
 import 'translation_controller.dart';
 import '../services/webrtc/call_manager.dart';
 import '../services/ai/inference_manager.dart';
+import '../services/ai/performance_monitor.dart';
 
 enum CallState { idle, connecting, inCall, ended, error }
 
@@ -67,12 +69,18 @@ class CallController extends ChangeNotifier {
   /// Language code for AI services ('en' or 'sw').
   String _languageCode = 'en';
 
+  /// This user's accessibility role. Decides which AI pipeline runs on this
+  /// device — see the role-gating note in TranslationController.start().
+  UserRole _role = UserRole.both;
+
   /// Tracks when the call started for duration calculation.
   DateTime? _callStartTime;
 
   /// Guard: ensures translation.start() is called exactly once,
   /// even if onRemoteStreamAdded fires multiple times.
   bool _translationStarted = false;
+
+  DateTime? _connectionStartTime;
 
   bool _ttsEnabled = true;
 
@@ -117,10 +125,11 @@ class CallController extends ChangeNotifier {
   // ENTRY POINTS
   // ─────────────────────────────────────────────
 
-  Future<bool> startAsCaller(String callId, String calleeUid, {String languageCode = 'en', bool ttsEnabled = true}) async {
+  Future<bool> startAsCaller(String callId, String calleeUid, {String languageCode = 'en', bool ttsEnabled = true, UserRole role = UserRole.both}) async {
     _isCaller = true;
     _languageCode = languageCode;
     _ttsEnabled = ttsEnabled;
+    _role = role;
     _peerUid = calleeUid;
     _callId = callId;
 
@@ -180,10 +189,11 @@ class CallController extends ChangeNotifier {
     return true;
   }
 
-  Future<bool> startAsCallee(String callId, String callerUid, {String languageCode = 'en', bool ttsEnabled = true}) async {
+  Future<bool> startAsCallee(String callId, String callerUid, {String languageCode = 'en', bool ttsEnabled = true, UserRole role = UserRole.both}) async {
     _isCaller = false;
     _languageCode = languageCode;
     _ttsEnabled = ttsEnabled;
+    _role = role;
     _peerUid = callerUid;
     final ok = await _bootstrap();
     if (!ok) return false;
@@ -211,6 +221,7 @@ class CallController extends ChangeNotifier {
   Future<bool> _bootstrap() async {
     try {
       _setState(CallState.connecting);
+      _connectionStartTime = DateTime.now();
       final granted = await AppPermissions.requestCallPermissions();
       if (!granted) {
         _fail('Camera & microphone permissions are required.');
@@ -238,7 +249,22 @@ class CallController extends ChangeNotifier {
             debugPrint('[CallController] WebRTC connection disconnected (transition state)');
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
-            debugPrint('[CallController] WebRTC connection failed (waiting for auto-recovery)');
+            {
+              // Previously this only logged "waiting for auto-recovery" and did
+              // nothing, so a failed ICE negotiation left the UI on
+              // "Waiting for peer..." forever with no explanation. ICE `failed`
+              // is terminal for the session — surface it to the user instead.
+              final hasRelay = webrtc.hasRelayCandidate;
+              debugPrint('[CallController] WebRTC connection FAILED. '
+                  'Local candidate types gathered: ${webrtc.localCandidateTypes}');
+              unawaited(_fail(hasRelay
+                  ? 'Connection failed — the two devices could not reach each '
+                      'other. Check that both phones have a working connection.'
+                  : 'Connection failed — no relay (TURN) path could be '
+                      'established. This is the usual cause on mobile data: the '
+                      'TURN credentials or URLs are wrong, or the monthly quota '
+                      'is exhausted.'));
+            }
             break;
           default:
             break;
@@ -250,20 +276,32 @@ class CallController extends ChangeNotifier {
       // video arrives on the callee side).
       _wireDataChannel();
 
-      // Start the AI translation pipeline ONLY when the remote peer's
-      // video stream has actually arrived — i.e. P2P is confirmed.
+      // Start the AI translation pipeline with a small delay to ensure
+      // WebRTC handshake is finished and CPU is stable.
       webrtc.onRemoteStreamAdded = () {
         _remoteConnected = true;
         notifyListeners();
 
+        if (_connectionStartTime != null) {
+          final diff = DateTime.now().difference(_connectionStartTime!).inMilliseconds;
+          PerformanceMonitor.instance.setIceConnectionTime(diff);
+        }
+
         if (!_translationStarted) {
           _translationStarted = true;
-          debugPrint('[CallController] P2P confirmed — starting translation pipeline (lang: $_languageCode, tts: $_ttsEnabled)');
-          translation.start(
-            languageCode: _languageCode,
-            localVideoTrack: webrtc.localVideoTrack,
-            ttsEnabled: _ttsEnabled,
-          );
+          debugPrint('[CallController] P2P confirmed — waiting for video before starting AI...');
+          
+          Timer(const Duration(seconds: 2), () {
+            if (!_disposed && _remoteConnected) {
+              debugPrint('[CallController] Starting AI pipeline.');
+              translation.start(
+                languageCode: _languageCode,
+                localVideoTrack: webrtc.localVideoTrack,
+                ttsEnabled: _ttsEnabled,
+                role: _role,
+              );
+            }
+          });
         }
       };
 
@@ -290,6 +328,10 @@ class CallController extends ChangeNotifier {
   void toggleMute() {
     _isMuted = !_isMuted;
     webrtc.toggleMute(_isMuted);
+    // The call is video-only, so there is no audio track left to mute. Route
+    // the button to the speech pipeline instead: for a hearing user it now
+    // means "stop listening for captions", which is the control they want.
+    translation.setSpeechPaused(_isMuted);
     notifyListeners();
   }
 

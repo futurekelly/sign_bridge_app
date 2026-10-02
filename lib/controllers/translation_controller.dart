@@ -73,6 +73,7 @@ class TranslationController extends ChangeNotifier {
   final _clearCtrl = StreamController<void>.broadcast();
 
   bool    _started       = false;
+  bool    _runSpeech     = true;
   String  _languageCode  = 'en';
   bool    _ttsEnabled    = true;
   AiStatus _currentStatus = AiStatus.idle;
@@ -107,11 +108,28 @@ class TranslationController extends ChangeNotifier {
     String languageCode = 'en',
     MediaStreamTrack? localVideoTrack,
     bool ttsEnabled = true,
+    UserRole role = UserRole.both,
   }) async {
     if (_started) return;
     _started = true;
     _languageCode = languageCode;
     _ttsEnabled = ttsEnabled;
+
+    // ── Role gating ──────────────────────────────────────────────
+    // Both phones run this same code. Without gating, the DEAF phone would
+    // also run speech recognition — and now that the call is video-only its
+    // microphone is free, so it would transcribe the hearing user's voice
+    // coming out of the speaker and send it straight back over the
+    // DataChannel. That is an echo loop between the two devices.
+    //
+    //   deaf    → gesture out, captions in    (speech recognition off)
+    //   hearing → speech out, gestures in     (gesture pipeline off)
+    //   both    → both pipelines on
+    _runSpeech = role != UserRole.deaf;
+    final runGesture = role != UserRole.hearing;
+
+    debugPrint('[TranslationController] start — role=$role '
+        'gesture=$runGesture speech=$_runSpeech');
 
     // Determine locale codes based on language selection.
     final ttsLang = languageCode == 'sw' ? 'sw-TZ' : 'en-US';
@@ -120,30 +138,47 @@ class TranslationController extends ChangeNotifier {
     // Initialize TTS with the correct language.
     await _tts.initialize(language: ttsLang);
 
-    // Subscribe to PredictionStabilizer streams
-    _subs.add(_gesture.inferenceManager.stabilizer.stablePredictionStream.listen(_onStablePrediction));
-    _subs.add(_gesture.inferenceManager.stabilizer.gestureEndStream.listen((_) {
-      // Hand removed → clear active label and notify overlay to dismiss.
-      _activeGestureLabel = null;
-      _activeGestureSince = null;
-      if (!_clearCtrl.isClosed) _clearCtrl.add(null);
-      debugPrint('[TranslationController] Gesture ended — overlay dismissed');
-    }));
+    if (runGesture) {
+      // Subscribe to PredictionStabilizer streams
+      _subs.add(_gesture.inferenceManager.stabilizer.stablePredictionStream.listen(_onStablePrediction));
+      _subs.add(_gesture.inferenceManager.stabilizer.gestureEndStream.listen((_) {
+        // Hand removed → clear active label and notify overlay to dismiss.
+        _activeGestureLabel = null;
+        _activeGestureSince = null;
+        if (!_clearCtrl.isClosed) _clearCtrl.add(null);
+        debugPrint('[TranslationController] Gesture ended — overlay dismissed');
+      }));
 
-    _subs.add(_gesture.statusStream.listen(_emitStatus));
+      _subs.add(_gesture.statusStream.listen(_emitStatus));
+    }
 
-    _subs.add(_speech.resultStream.listen(_onSpeechResult));
-    _subs.add(_speech.statusStream.listen(_emitStatus));
+    if (_runSpeech) {
+      _subs.add(_speech.resultStream.listen(_onSpeechResult));
+      _subs.add(_speech.statusStream.listen(_emitStatus));
+      await _speech.initialize(locale: sttLocale);
+    }
 
-    // Initialize STT with the correct locale, then start both pipelines.
-    await _speech.initialize(locale: sttLocale);
     await Future.wait([
-      _gesture.start(localVideoTrack: localVideoTrack),
-      _speech.start(),
+      if (runGesture) _gesture.start(localVideoTrack: localVideoTrack),
+      if (_runSpeech) _speech.start(),
     ]);
 
     // Emit current cached history so late subscribers see something.
     _historyCtrl.add(List.unmodifiable(_historyCache));
+  }
+
+  /// Pauses or resumes caption capture.
+  ///
+  /// Wired to the in-call mic button. The call carries no audio, so there is
+  /// no track left to mute — for a hearing user, "mute" now means "stop
+  /// listening for captions", which is the control they actually want.
+  Future<void> setSpeechPaused(bool paused) async {
+    if (!_runSpeech) {
+      debugPrint('[TranslationController] setSpeechPaused($paused) ignored — '
+          'this role does not run speech recognition');
+      return;
+    }
+    await _speech.setPaused(paused);
   }
 
   /// Stops the AI pipeline.
@@ -363,7 +398,9 @@ class TranslationController extends ChangeNotifier {
     }
   }
 
-  /// Simulates a local speech result for testing (injection hook)
+  /// Simulates a local speech result (quick-phrase tap injection hook).
+  /// The hearing user taps a phrase chip → this publishes locally AND forwards
+  /// over the DataChannel, so the deaf peer sees the caption+emoji.
   void simulateLocalSpeech(String text) {
     final msg = TranslationMessage(
       text: text,
@@ -371,6 +408,18 @@ class TranslationController extends ChangeNotifier {
       language: languageTag,
     );
     _onSpeechResult(msg);
+  }
+
+  /// Push-to-talk control for the hearing user's live mic.
+  /// STT (with keyword filtering + auto-restart) already runs through
+  /// SpeechService; this just lets the UI start/stop it on demand so the
+  /// hearing user can talk when they choose. No-op if STT is unsupported.
+  Future<void> setMicListening(bool on) async {
+    if (on) {
+      await _speech.start();
+    } else {
+      await _speech.stop();
+    }
   }
 
   // ─────────────────────────────────────────────

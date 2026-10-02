@@ -87,12 +87,12 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => Navigator.pushNamed(context, AppRoutes.settings),
           ),
           IconButton(
-            tooltip: 'Logout',
+            tooltip: a11y.t('nav.logout'),
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await _auth.signOut();
               if (context.mounted) {
-                Navigator.pushReplacementNamed(context, AppRoutes.login);
+                Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
               }
             },
           ),

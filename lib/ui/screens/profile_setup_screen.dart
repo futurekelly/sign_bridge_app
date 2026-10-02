@@ -251,7 +251,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with TickerProv
   Future<void> _logout() async {
     await _auth.signOut();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, AppRoutes.login);
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
     }
   }
 

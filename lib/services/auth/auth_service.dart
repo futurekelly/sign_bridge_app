@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/enums.dart';
+import '../webrtc/call_manager.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -189,7 +190,17 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    await _googleSignIn.signOut();
+    // Stop the incoming-call listener so it doesn't stay active after signout.
+    // If we don't cancel it here, the next login gets a duplicate/stale subscription.
+    CallManager.instance.stopListening();
+
+    // Google Sign-In isn't available on Huawei devices (no GMS), so wrap it defensively.
+    try {
+      await _googleSignIn.signOut();
+    } catch (e) {
+      debugPrint('[AuthService] Google signOut failed (expected on Huawei): $e');
+    }
+
     await _auth.signOut();
   }
 

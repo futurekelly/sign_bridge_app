@@ -65,11 +65,11 @@ class SignalingService {
 
     final docRef = FirestoreService.callsRef.doc(callId);
 
-    // 1) Wire WebRTC callbacks → Firestore updates.
+    // 1) Wire WebRTC callbacks → Firestore updates using merge.
     webrtc.onLocalSdpReady = (RTCSessionDescription sdp) async {
-      await docRef.update({
+      await docRef.set({
         'offer': {'sdp': sdp.sdp, 'type': sdp.type},
-      });
+      }, SetOptions(merge: true));
     };
     webrtc.onLocalIceCandidate = (RTCIceCandidate c) async {
       await FirestoreService.callerCandidates(_callId!).add(_candToMap(c));
@@ -94,16 +94,16 @@ class SignalingService {
       throw Exception('Call $callId not found');
     }
 
-    // 1) Mark as accepted.
-    await docRef.update({
+    // 1) Mark as accepted using merge.
+    await docRef.set({
       'status': 'accepted',
-    });
+    }, SetOptions(merge: true));
 
-    // 2) Wire callbacks for our own SDP/ICE.
+    // 2) Wire callbacks for our own SDP/ICE using merge.
     webrtc.onLocalSdpReady = (RTCSessionDescription sdp) async {
-      await docRef.update({
+      await docRef.set({
         'answer': {'sdp': sdp.sdp, 'type': sdp.type},
-      });
+      }, SetOptions(merge: true));
     };
     webrtc.onLocalIceCandidate = (RTCIceCandidate c) async {
       await FirestoreService.calleeCandidates(callId).add(_candToMap(c));
@@ -139,9 +139,9 @@ class SignalingService {
         }
       });
 
-      // Wait up to 10 seconds for caller to initialize camera/offer
+      // Wait up to 15 seconds for caller to initialize camera/offer (supports mobile network latency)
       await completer.future.timeout(
-        const Duration(seconds: 10),
+        const Duration(seconds: 15),
         onTimeout: () {
           tempSub?.cancel();
           throw TimeoutException('Timed out waiting for caller to initialize connection');

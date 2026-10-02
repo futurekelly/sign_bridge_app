@@ -107,6 +107,7 @@ class _TranslationOverlayState extends State<TranslationOverlay>
     'no':        '✋',
     'help':      '🆘',
     'thank_you': '🙏',
+    'sorry':     '🙇',
   };
 
   static const Map<String, List<String>> _bilingual = {
@@ -115,17 +116,20 @@ class _TranslationOverlayState extends State<TranslationOverlay>
     'no':        ['No',        'Hapana'],
     'help':      ['Help',      'Msaada'],
     'thank_you': ['Thank You', 'Asante'],
+    'sorry':     ['Sorry',     'Samahani'],
   };
 
   // Normalize any variant text → canonical key
   static const Map<String, String> _keyMap = {
     'hello':     'hello',     'habari':    'hello',     'hi':        'hello',
-    'hujambo':   'hello',
-    'yes':       'yes',       'ndiyo':     'yes',
-    'no':        'no',        'hapana':    'no',
-    'help':      'help',      'msaada':    'help',
+    'hujambo':   'hello',     'mambo':     'hello',     'jambo':     'hello',
+    'yes':       'yes',       'ndiyo':     'yes',       'ndio':      'yes',
+    'no':        'no',        'hapana':    'no',        'la':        'no',
+    'help':      'help',      'msaada':    'help',      'saidia':    'help',
     'thank you': 'thank_you', 'thank_you': 'thank_you', 'asante':    'thank_you',
-    'thanks':    'thank_you',
+    'shukrani':  'thank_you', 'thanks':    'thank_you',
+    'sorry':     'sorry',     'samahani':  'sorry',     'pole':      'sorry',
+    'please':    'please',    'tafadhali': 'please'
   };
 
   @override
@@ -166,11 +170,21 @@ class _TranslationOverlayState extends State<TranslationOverlay>
 
   void _onMessage(TranslationMessage msg) {
     final key = _resolveKey(msg);
-    if (key == null) return; // unrecognised word — stay hidden
+    final isSpeech = msg.source == 'speech';
+    
+    // If it's a gesture and unknown, stay hidden. 
+    // If it's speech and unknown, show it as a generic caption (to ensure responsiveness).
+    if (key == null && !isSpeech) return; 
 
     final isGesture = msg.source == 'gesture';
-    final emoji     = isGesture ? (_gestureEmoji[key] ?? '🤟') : (_speechEmoji[key] ?? '🎤');
-    final bilingual = _bilingual[key] ?? [msg.text.replaceAll('_', ' '), ''];
+    // Use _gestureEmoji as a fallback for speech if no specific speech emoji is set
+    final emoji = isGesture 
+        ? (key != null ? (_gestureEmoji[key] ?? '🤟') : '🤟') 
+        : (key != null ? (_speechEmoji[key] ?? _gestureEmoji[key] ?? '🎤') : '🎤');
+
+    final bilingual = (key != null)
+        ? (_bilingual[key] ?? [msg.text.replaceAll('_', ' '), ''])
+        : [msg.text.replaceAll('_', ' '), ''];
 
     // Get confidence from InferenceManager if it's a gesture
     double confidence = 0.0;

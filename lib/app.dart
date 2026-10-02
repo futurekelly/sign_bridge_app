@@ -9,20 +9,13 @@ import 'controllers/accessibility_controller.dart';
 import 'core/theme.dart';
 import 'core/routes.dart';
 import 'core/constants.dart';
-import 'ui/screens/onboarding_screen.dart';
+import 'ui/widgets/boot_gate.dart';
 
 class SignBridgeApp extends StatelessWidget {
   const SignBridgeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Decide initial route:
-    // 1. If first launch → onboarding
-    // 2. Otherwise → login (which auto-skips to home if already signed in)
-    final initialRoute = OnboardingScreen.hasSeenOnboarding
-        ? AppRoutes.login
-        : AppRoutes.onboarding;
-
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeController()),
@@ -35,7 +28,11 @@ class SignBridgeApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: themeCtrl.themeMode,
-          initialRoute: initialRoute,
+          // BootGate decides between onboarding / login / profile setup / home
+          // *before* building any of them, so an already-signed-in user never
+          // sees the login form. See lib/ui/widgets/boot_gate.dart for why
+          // this is not just an initialRoute.
+          home: const BootGate(),
           routes: AppRoutes.routes,
           navigatorKey: AppRoutes.navigatorKey,
         ),

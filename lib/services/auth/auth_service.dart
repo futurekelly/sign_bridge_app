@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/enums.dart';
+import '../../data/local/hive_db.dart';
 import '../webrtc/call_manager.dart';
 
 class AuthService {
@@ -202,6 +203,18 @@ class AuthService {
     }
 
     await _auth.signOut();
+
+    // Drop the cached "profile is complete" answer, so the next sign-in
+    // re-verifies against Firestore rather than trusting a local flag.
+    //
+    // Deliberately AFTER signOut, and guarded: if this ran first and threw,
+    // the user would be unable to log out at all. A failed cache clear is
+    // harmless — the cache is keyed by uid, so a different account ignores it.
+    try {
+      await clearProfileCache();
+    } catch (e) {
+      debugPrint('[AuthService] profile cache clear failed (harmless): $e');
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -265,5 +278,47 @@ class AuthService {
         profile['displayName'].toString().trim().isNotEmpty &&
         profile['signBridgeId'] != null &&
         profile['signBridgeId'].toString().trim().isNotEmpty;
+  }
+
+  // ─────────────────────────────────────────────
+  // PROFILE-COMPLETE CACHE
+  // ─────────────────────────────────────────────
+  //
+  // hasProfile() is a Firestore round-trip, and the launch path used to await
+  // it before it would move a returning user off the login screen. On a slow
+  // connection that is a visible stall on every single launch, for an answer
+  // that essentially never changes once it is true: registerWithEmail and
+  // profile setup both write displayName and signBridgeId together, and
+  // nothing in the app removes them.
+  //
+  // So the answer is remembered locally, keyed by uid. Keying by uid matters:
+  // if a different account signs in on the same phone the stored uid will not
+  // match, so it re-checks rather than inheriting the previous user's answer.
+  // Signing back into the same account reuses the cache, which is exactly the
+  // returning-user case this is here to make fast.
+  //
+  // A stale `true` is only possible if a profile is deleted server-side, which
+  // nothing does. A stale `false` cannot happen: we only ever cache a `true`.
+
+  static const String _kProfileCompleteUid = 'profileCompleteUid';
+
+  /// Whether the signed-in user has a complete profile, answered from the
+  /// local cache when possible. Falls back to (and populates from) Firestore.
+  Future<bool> hasProfileCached() async {
+    final user = currentUser;
+    if (user == null) return false;
+
+    if (HiveDb.settings.get(_kProfileCompleteUid) == user.uid) return true;
+
+    final complete = await hasProfile();
+    if (complete) await HiveDb.settings.put(_kProfileCompleteUid, user.uid);
+    return complete;
+  }
+
+  /// Forget the cached answer. Called on sign-out so a profile completed on
+  /// this device is re-verified the next time an account signs in, rather than
+  /// being trusted indefinitely.
+  Future<void> clearProfileCache() async {
+    await HiveDb.settings.delete(_kProfileCompleteUid);
   }
 }

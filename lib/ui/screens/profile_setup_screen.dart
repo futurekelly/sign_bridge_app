@@ -11,6 +11,7 @@ import '../../core/theme.dart';
 import '../../core/spacing.dart';
 import '../../core/routes.dart';
 import '../../services/auth/auth_service.dart';
+import '../widgets/brand_mark.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -315,25 +316,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with TickerProv
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Brand Identity Icon
-                    Container(
-                      width: 72, height: 72,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [AppColors.primary, AppColors.primaryLight],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.4),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6)
-                          ),
-                        ]
-                      ),
-                      child: const Icon(Icons.badge_outlined, size: 36, color: Colors.white),
-                    ),
+                    // Brand Identity Icon — same shared mark as the launcher
+                    // icon and the login screen, with the setup glyph.
+                    const BrandMark(size: 72, icon: Icons.badge_outlined),
                     const SizedBox(height: AppSpacing.md),
                     Text(
                       a11y.t('profile_setup.title'),

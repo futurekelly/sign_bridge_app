@@ -12,6 +12,7 @@ import '../../core/theme.dart';
 import '../../core/spacing.dart';
 import '../../core/routes.dart';
 import '../../services/auth/auth_service.dart';
+import '../widgets/brand_mark.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 enum AuthMode { login, signup }
@@ -45,8 +46,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _checkExistingUser();
-    
+    // NOTE: this screen no longer checks whether a user is already signed in.
+    // That decision now happens in BootGate before this widget is ever built,
+    // so reaching LoginScreen means the user is genuinely signed out. Doing
+    // the check here as well was what made an already-signed-in user watch
+    // the login form appear and then disappear.
+
     _bgAnimController = AnimationController(
       vsync: this, 
       duration: const Duration(seconds: 10)
@@ -58,19 +63,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         .animate(_bgAnimController);
   }
 
-  Future<void> _checkExistingUser() async {
-    if (_auth.currentUser != null) {
-      final hasProfile = await _auth.hasProfile();
-      if (mounted) {
-        if (hasProfile) {
-          await _syncRoleAndGoHome();
-        } else {
-          Navigator.pushReplacementNamed(context, AppRoutes.profileSetup);
-        }
-      }
-    }
-  }
-
+  /// Shared tail of every successful sign-in: pull the user's role from
+  /// Firestore, apply it, then move to the dashboard.
+  ///
+  /// This is only reached from an explicit sign-in action, where the user is
+  /// already watching a spinner, so the Firestore reads here are not on any
+  /// launch path. The launch path deliberately does NOT use this — see
+  /// lib/ui/widgets/boot_gate.dart.
   Future<void> _syncRoleAndGoHome() async {
     try {
       final profile = await _auth.getUserProfile();
@@ -133,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
 
       if (!mounted) return;
-      final hasProfile = await _auth.hasProfile();
+      final hasProfile = await _auth.hasProfileCached();
       if (mounted) {
         if (hasProfile) {
           await _syncRoleAndGoHome();
@@ -158,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     try {
       final user = await _auth.signInWithGoogle();
       if (user != null && mounted) {
-        final hasProfile = await _auth.hasProfile();
+        final hasProfile = await _auth.hasProfileCached();
         if (mounted) {
           if (hasProfile) {
             await _syncRoleAndGoHome();
@@ -179,7 +178,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     try {
       await _auth.signInAnonymously();
       if (!mounted) return;
-      final hasProfile = await _auth.hasProfile();
+      final hasProfile = await _auth.hasProfileCached();
       if (mounted) {
         if (hasProfile) {
           await _syncRoleAndGoHome();
@@ -428,21 +427,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     ),
                     const SizedBox(height: AppSpacing.md),
 
-                    // Brand Logo
-                    Container(
-                      width: 80, height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [AppColors.primary, AppColors.primaryLight],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(color: AppColors.primary.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 8)),
-                        ]
-                      ),
-                      child: const Icon(Icons.sign_language, size: 40, color: Colors.white),
-                    ),
+                    // Brand Logo — shared widget so it cannot drift from the
+                    // launcher icon again (it used to use the old blue-on-blue
+                    // gradient while the icon was blue-to-emerald).
+                    const BrandMark(size: 80),
                     const SizedBox(height: AppSpacing.md),
                     Text(AppConstants.appName, style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: AppSpacing.xs),

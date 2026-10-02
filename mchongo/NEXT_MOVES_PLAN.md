@@ -30,15 +30,48 @@ The app is **demo-ready today**. Everything below is polish for the supervisor d
 
 | # | Step | Blocked by | Done |
 |---|---|---|---|
-| 0 | Documentation (this file + the walkthrough) | — | ☐ |
-| 1 | **Logo artwork** — decide the source image | user decision | ☐ |
-| 2 | App launcher icon (all densities + adaptive) | step 1 | ☐ |
-| 3 | Splash / launch screen | step 1 | ☐ |
-| 4 | Branded loading animation (Master Plan Step 15) | step 1 | ☐ |
+| 0 | Documentation (this file + the walkthrough) | — | ✅ `7c23d28` |
+| 1 | **Logo artwork** — decide the source image | — | ✅ option B (generated) |
+| 2 | App launcher icon (all densities + adaptive) | step 1 | ✅ `aab44cc` |
+| 3 | Splash / launch screen | step 1 | ✅ `aab44cc` |
+| 4 | Branded loading animation (Master Plan Step 15) | — | ☐ **next** |
 | 5 | Strip the TEMP DIAGNOSTIC blocks | — | ☐ |
 | 6 | Neon glow UI polish (Master Plan Step 16) — *optional* | — | ☐ |
-| 7 | Release build + GitHub Release | steps 2–5 | ☐ |
+| 7 | Release build + GitHub Release | steps 4–5 | ☐ |
 | 8 | AI Simulator Panel (Master Plan Step 14) — *optional* | — | ☐ |
+
+**Step 1 was resolved as option B, not A.** No artwork existed to supply: `docs/` is
+markdown only, `web/` is the untouched Flutter scaffold, and `web/favicon.png` is 16×16.
+So the mark was generated from the app's own identity — the Material `sign_language`
+glyph (`0xf07c3`, already the deaf-role icon at 16 call sites) on a gradient from
+`AppColors.primary` `#2563EB` (deaf) to `AppColors.secondary` `#10B981` (hearing).
+Swap in real artwork later by replacing `assets/branding/icon_source_1024.png` (plus the
+two adaptive layers) and re-running `dart run flutter_launcher_icons`.
+
+### Open issue — duplicate launcher icon on the Samsung
+
+The Samsung shows **two** SignBridge icons in its app drawer. Cause found, and it is
+pre-existing rather than caused by any of the work above:
+
+```
+User 0:   installed=true     <- the real profile (hexa's data lives here)
+User 95:  installed=true     <- a second profile, stopped=true
+User 150: installed=false    <- Secure Folder, empty
+```
+
+Profile `user 95` has its own `com.example.sign_bridge/.MainActivity`, so the launcher
+draws it separately. The Huawei has only `user 0` and shows one icon, which is consistent.
+
+This matters for a demo: tapping the second icon launches a **fresh instance with no
+profile** — no display name, no history — which reads as a broken app. The scoped fix
+leaves the real install untouched:
+
+```bash
+adb -s R58N74Y4K8V shell pm uninstall --user 95 com.example.sign_bridge
+```
+
+**Not yet run**, because the standing rule is not to uninstall from either phone; this
+needs an explicit go-ahead even though it cannot touch user 0.
 
 ---
 

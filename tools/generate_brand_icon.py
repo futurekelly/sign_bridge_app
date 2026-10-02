@@ -87,6 +87,12 @@ def main():
 
     grad.save(os.path.join(OUT, "icon_background_1024.png"))
 
+    # Splash logo: the glyph alone on transparency, so it sits on the brand
+    # background without a square tile edge showing around it.
+    splash = Image.new("RGBA", (SIZE, SIZE), (255, 255, 255, 0))
+    splash.putalpha(alpha_of(glyph, 0.62))
+    splash.save(os.path.join(OUT, "splash_logo.png"))
+
     # Preview sheet: how it reads at real launcher sizes.
     sheet = Image.new("RGB", (1100, 420), (0xF0, 0xF4, 0xF8))
     d = ImageDraw.Draw(sheet)

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher name, shown under the icon and in the app switcher.
+         Android reads this from the APK, so it cannot come from the Dart-side
+         AppConstants.appName; the two have to be kept in step by hand. -->
+    <string name="app_name">SignBridge</string>
+</resources>

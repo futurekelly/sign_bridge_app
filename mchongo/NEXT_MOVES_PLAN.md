@@ -48,9 +48,9 @@ glyph (`0xf07c3`, already the deaf-role icon at 16 call sites) on a gradient fro
 Swap in real artwork later by replacing `assets/branding/icon_source_1024.png` (plus the
 two adaptive layers) and re-running `dart run flutter_launcher_icons`.
 
-### Open issue — duplicate launcher icon on the Samsung
+### Resolved — duplicate launcher icon on the Samsung
 
-The Samsung shows **two** SignBridge icons in its app drawer. Cause found, and it is
+The Samsung showed **two** SignBridge icons in its app drawer. Cause found, and it was
 pre-existing rather than caused by any of the work above:
 
 ```
@@ -70,8 +70,13 @@ leaves the real install untouched:
 adb -s R58N74Y4K8V shell pm uninstall --user 95 com.example.sign_bridge
 ```
 
-**Not yet run**, because the standing rule is not to uninstall from either phone; this
-needs an explicit go-ahead even though it cannot touch user 0.
+**Run and verified on 2026-10-02.** Afterwards `user 0` still reported `installed=true`
+with the same `ceDataInode=44239`, so its data was untouched; the app cold-launched to
+`hexa / h3xa` with its full call history, and the drawer showed a single icon.
+
+One caution for next time: `pm uninstall --user 95` removes only that profile's copy.
+A plain `pm uninstall com.example.sign_bridge` would have taken `user 0` as well and
+destroyed the account on that phone.
 
 ---
 

@@ -16,6 +16,8 @@
 | **Working state** | All five signs — `hello`, `yes`, `no`, `help`, `thank_you` — recognise correctly on both physical phones |
 | **APK size** | **34.4 MB** per phone (arm64-v8a), down from 137.7 MB |
 | **Installed build** | versionCode **2001**, debug-signed, arm64-v8a |
+| **Launch behaviour** | Signed-in users go straight to the dashboard; the login form is never shown to them (`1b4bc6a`) |
+| **Brand mark** | In-app logo, launcher icon and splash all use one blue→emerald gradient (`1b4bc6a`) |
 | **Branch** | `main`, clean except the untracked doc in `mchongo/` |
 | **Remote** | `https://github.com/futurekelly/sign_bridge_app.git` |
 | **Last tag** | `v1.2-working-5-signs` |
@@ -34,6 +36,7 @@ The app is **demo-ready today**. Everything below is polish for the supervisor d
 | 1 | **Logo artwork** — decide the source image | — | ✅ option B (generated) |
 | 2 | App launcher icon (all densities + adaptive) | step 1 | ✅ `aab44cc` |
 | 3 | Splash / launch screen | step 1 | ✅ `aab44cc` |
+| 3b | **Auth gate** (skip login for a signed-in user) + unify the in-app brand mark | — | ✅ `1b4bc6a` |
 | 4 | Branded loading animation (Master Plan Step 15) | — | ☐ **next** |
 | 5 | Strip the TEMP DIAGNOSTIC blocks | — | ☐ |
 | 6 | Neon glow UI polish (Master Plan Step 16) — *optional* | — | ☐ |
@@ -77,6 +80,29 @@ with the same `ceDataInode=44239`, so its data was untouched; the app cold-launc
 One caution for next time: `pm uninstall --user 95` removes only that profile's copy.
 A plain `pm uninstall com.example.sign_bridge` would have taken `user 0` as well and
 destroyed the account on that phone.
+
+### Resolved — the login form flashing up for a signed-in user (`1b4bc6a`)
+
+`app.dart` always started at `/login`, and `LoginScreen._checkExistingUser()`
+then awaited **two** Firestore reads before navigating home. Replaced with
+`BootGate`, which decides before any screen is built. Full write-up in
+`2026-10-02_Auth_Gate_and_Brand_Mark.md`; the one-line summary is that the login
+form is now never constructed for a signed-in user, and the profile answer is
+cached in Hive keyed by uid so the common launch does no network read at all.
+
+### Found — two of the three split APKs cannot launch (`1b4bc6a`)
+
+MediaPipe's `tasks-vision` AAR ships **arm64-v8a only**. `armeabi-v7a` and
+`x86_64` APKs are produced by `--split-per-abi` but crash immediately with
+`UnsatisfiedLinkError: libmediapipe_tasks_vision_jni.so not found`, before the
+Flutter engine draws a frame. **The app requires a 64-bit ARM device.**
+
+This is not a regression and nothing on either phone is affected — but it means:
+
+- On release day, ship **only** `app-arm64-v8a-release.apk`, or build with
+  `--target-platform android-arm64`. Do not upload the other two.
+- An Android emulator is **not** a usable test target for this app.
+- Do not reach for `ndk { abiFilters }` to "fix" it — rule 4 below.
 
 ---
 
@@ -159,6 +185,9 @@ Master Plan Step 16. Cosmetic. Only worth doing if steps 2–5 are done and the 
 - [ ] pubspec `version:` set to **`1.0.0+3` or higher**. This is not cosmetic: `+1` produces versionCode **2001**, exactly what is already installed, and Android will refuse to update over it. `+2` → 2002 also works; `+3` is safer if any intermediate build was ever installed.
 - [ ] Both TEMP DIAGNOSTIC blocks removed
 - [ ] `flutter build apk --split-per-abi --release` — **stay on split-per-abi**
+- [ ] Upload **only** `app-arm64-v8a-release.apk`. The `armeabi-v7a` and
+      `x86_64` APKs cannot launch at all — MediaPipe ships no native library for
+      either. See the note above; this is a real trap on release day
 - [ ] `flutter analyze` clean
 - [ ] Sign-test on **both** phones, all five signs, plus one call, plus vibration, plus that the deaf device stays silent
 - [ ] Copy the arm64 APK into `backup_apk/` **before** uploading anything
